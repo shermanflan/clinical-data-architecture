@@ -1,0 +1,25 @@
+version: "3.8"
+services:
+  stage_data:
+    image: stage_data
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: [
+      "/bin/sh",
+      "-c",
+      "/opt/spark/bin/spark-submit \
+      --name stage_data \
+      local:///opt/spark/stage_data/main.py \
+      --filepath s3a://bangkok/departuredelays.csv
+      --output_path s3a://condesa/departuredelays"
+    ]
+    #--filepath s3a://bangkok/sf-fire-calls.csv
+    #--filepath s3a://bangkok/mnm_dataset.csv
+    #--filepath s3a://bangkok/blogs.json"
+    env_file: .env
+    environment:
+      - LOG_LEVEL=WARN
+    volumes:
+      - ./local_config:/opt/spark/conf
+      - ./sample_data/synthea_1m_fhir_3_0_May_24/output_1/csv:/opt/spark/work-dir/sample_data
