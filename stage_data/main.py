@@ -101,6 +101,8 @@ def main(filepath: str, output_path: str) -> None:
     encounters_1 = (
         spark_session
         .read
+        # .option("mode", "FAILFAST")  # Exit if any errors
+        # .option("nullValue", "")  # Replace any null data with quotes
         .csv('sample_data/output_1/encounters.csv', header=True, schema=ENCOUNTER)
     )
 
@@ -133,15 +135,59 @@ def main(filepath: str, output_path: str) -> None:
         # .orderBy("total_enc", ascending=False)  # wide transformation
     )
 
-    # Calculate BP metrics
-    vitals_1.createOrReplaceTempView("vitals_1")
+    logger.info("Create managed table...")
+    # Tables persist after the Spark application terminates, but views disappear.
+    # Uses /user/hive/warehouse metastore by default
+    # TODO: Read data using DataGrip
+    spark_session.sql("CREATE DATABASE clinical_data")
+    spark_session.sql("USE clinical_data")
+    (
+        enc_counts
+        .write
+        # .option("path", "/tmp/data/us_flights_delay")  # converts to unmanaged
+        .saveAsTable("encounter_codes")  # action
+    )
+
+    logger.info("Create unmanaged table...")
+    spark_session.sql("""
+        CREATE TABLE encounters
+        (
+            ID                  String,
+            DATE                Date,
+            PATIENT             String,
+            CODE                String,
+            DESCRIPTION         String,
+            REASONCODE          String,
+            REASONDESCRIPTION   String
+        ) 
+        USING csv
+        OPTIONS
+        (
+            PATH 'sample_data/output_1/encounters.csv'
+        )
+    """)
+
+    logger.info("Calculate BP metrics using views...")
+    (
+        vitals_1
+        .write
+        .saveAsTable("vitals_1")  # action
+    )
+    spark_session.sql("""
+        -- Global scope (across sessions)
+        CREATE OR REPLACE GLOBAL TEMP VIEW vw_vitals_1
+        AS
+        SELECT  *
+        FROM    vitals_1
+    """)
     vitals_2.createOrReplaceTempView("vitals_2")
+
     bp_counts = spark_session.sql("""
         SELECT  PRAC_ID,
                 CODE,
                 DESCRIPTION,
                 COUNT(*) AS total
-        FROM    vitals_1
+        FROM    global_temp.vw_vitals_1
         WHERE   CODE IN ('8480-6', '8462-4')
         GROUP BY PRAC_ID, CODE, DESCRIPTION
         UNION ALL
@@ -174,7 +220,6 @@ def main(filepath: str, output_path: str) -> None:
         .parquet(to_path,
                  mode='overwrite',
                  partitionBy=['PRAC_ID'])  # action
-        # .saveAsTable('bp_counts')  # action
     )
 
     logger.info(f"Load process finished in {datetime.now() - start}")
