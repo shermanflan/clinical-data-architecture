@@ -5,6 +5,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    ports:
+      - 4040:4040
     command: [
       "/bin/sh",
       "-c",
@@ -14,12 +16,12 @@ services:
       --filepath s3a://bangkok/departuredelays.csv
       --output_path s3a://condesa/departuredelays"
     ]
-    #--filepath s3a://bangkok/sf-fire-calls.csv
-    #--filepath s3a://bangkok/mnm_dataset.csv
-    #--filepath s3a://bangkok/blogs.json"
     env_file: .env
     environment:
       - LOG_LEVEL=WARN
     volumes:
       - ./local_config:/opt/spark/conf
-      - ./sample_data/synthea_1m_fhir_3_0_May_24/output_1/csv:/opt/spark/work-dir/sample_data
+      # - ./local_hive:/opt/spark/hive_warehouse
+      - ./sample_data/synthea_1m_fhir_3_0_May_24/output_1/csv:/opt/spark/work-dir/sample_data/output_1
+      - ./sample_data/synthea_1m_fhir_3_0_May_24/output_2/csv:/opt/spark/work-dir/sample_data/output_2
+      - ./sample_data/output_data:/opt/spark/work-dir/output_data
