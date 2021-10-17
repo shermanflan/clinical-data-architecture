@@ -87,7 +87,7 @@ def main(filepath: str, output_path: str) -> None:
         # .config("spark.sql.parquet.mergeSchema", "false")
         # .config("spark.sql.parquet.filterPushdown", "true")
         # .config("spark.sql.hive.metastorePartitionPruning", "true")
-        # Hive
+        # Specify different location for Hive metastore
         # .config("spark.sql.warehouse.dir", "/opt/spark/hive_warehouse")
         # .config("spark.sql.catalogImplementation", "hive")
         .getOrCreate()
@@ -222,6 +222,7 @@ def main(filepath: str, output_path: str) -> None:
                  partitionBy=['PRAC_ID'])  # action
     )
 
+    # TODO: Write to PostgreSQL
     logger.info(f"Load process finished in {datetime.now() - start}")
     input("Press enter to exit...")  # keep alive for Spark UI
 

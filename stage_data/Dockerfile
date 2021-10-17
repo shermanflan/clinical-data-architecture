@@ -25,4 +25,7 @@ ENTRYPOINT [ "/opt/entrypoint.sh" ]
 
 # Specify the User that the actual main process will run as
 ARG spark_uid=185
-USER ${spark_uid}
+
+# Leave as root to start Thrift server
+# ${SPARK_HOME}/sbin/start-thriftserver.sh
+# USER ${spark_uid}
