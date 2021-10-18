@@ -12,6 +12,7 @@ import os
 
 # import boto3
 import click
+from delta.tables import DeltaTable
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import (
     asc, col, concat, count, expr, lit, sum as spark_sum, to_timestamp,
@@ -52,10 +53,15 @@ VITALS = """
 """
 
 
-@click.command()
+@click.group()
+def cli():
+    pass
+
+
+@cli.command()
 @click.option('--filepath', required=False, help='The input file path')
 @click.option('--output_path', required=False, help='The output file path')
-def main(filepath: str, output_path: str) -> None:
+def examples(filepath: str, output_path: str) -> None:
     """
     To configure AWS bucket-specific authorization, use the
     `fs.s3a.bucket.[bucket name].access.key` configuration setting.
@@ -97,6 +103,9 @@ def main(filepath: str, output_path: str) -> None:
     start = datetime.now()
     logger.info(f"Load process started")
 
+    # TODO: Implement "Current" tables as delta lake tables (merge/upsert)
+    # TODO: Stream (update mode) to PostgreSQL table
+    # TODO: Build ETL for raw -> parquet
     # Use the DataFrameReader interface to read a CSV file
     encounters_1 = (
         spark_session
@@ -182,6 +191,9 @@ def main(filepath: str, output_path: str) -> None:
     """)
     vitals_2.createOrReplaceTempView("vitals_2")
 
+    # TODO: Join systolic and diastolic
+    # TODO: Unnest row to columns: stack
+    # https://medium.com/@koushikweblog/pivot-unpivot-data-with-sparksql-pyspark-databricks-89f575f3b3ed
     bp_counts = spark_session.sql("""
         SELECT  PRAC_ID,
                 CODE,
@@ -213,8 +225,7 @@ def main(filepath: str, output_path: str) -> None:
     )
     logger.info(f"Save as parquet to {to_path}...")
     (
-        vitals_1
-        .unionAll(vitals_2)
+        vitals_1.unionAll(vitals_2)
         # .limit(21)  # filtered for speed
         .write
         .parquet(to_path,
@@ -222,7 +233,144 @@ def main(filepath: str, output_path: str) -> None:
                  partitionBy=['PRAC_ID'])  # action
     )
 
-    # TODO: Write to PostgreSQL
+    logger.info(f"Save to PostgreSQL...")
+    (
+        bp_counts
+        .write
+        .jdbc(url=os.environ['POSTGRES_JDBC_URL'],
+              table='bp_counts',
+              mode='overwrite')
+     )
+
+    # TODO: Stream from csv/parquet directory to PostgreSQL (append, update)
+    # TODO: Stream from csv/parquet vitals to groupBy(patient).max(observation)?
+    logger.info(f"Load process finished in {datetime.now() - start}")
+    input("Press enter to exit...")  # keep alive for Spark UI
+
+    spark_session.stop()
+
+
+@cli.command()
+@click.option('--filepath', required=False, help='The input file path')
+@click.option('--output_path', required=False, help='The output file path')
+def delta_lake(filepath: str, output_path: str) -> None:
+    """
+    Delta lake examples
+    """
+    spark_session = (
+        SparkSession
+        .builder
+        .appName("stage_data")
+        .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
+        .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog")
+        .getOrCreate()
+    )
+    spark_session.sparkContext.setLogLevel(LOG_LEVEL)
+
+    start = datetime.now()
+    logger.info(f"Load process started")
+
+    # TODO: Implement "Current" tables as delta lake tables (merge)
+    # Use the DataFrameReader interface to read a CSV file
+    encounters_1 = (
+        spark_session
+        .read
+        # .option("mode", "FAILFAST")  # Exit if any errors
+        # .option("nullValue", "")  # Replace any null data with quotes
+        .csv('sample_data/output_1/encounters.csv', header=True, schema=ENCOUNTER)
+    )
+
+    enc_counts = (
+        encounters_1
+        # .withColumn("CallYear", to_timestamp(col("CallDate"), "MM/dd/yyyy"))
+        .withColumnRenamed("DATE", "encounter_date")
+        .where("REASONCODE != '4448140091' AND REASONCODE IS NOT NULL")
+        # .where((col("REASONCODE") != "444814009") & col("REASONCODE").isNotNull())
+        .select('CODE', spark_year('encounter_date').alias('enc_year'), 'ID')
+        .groupBy('CODE', 'enc_year')  # wide transformation
+        .agg(count('ID').alias("total_enc"))  # action
+        .orderBy(asc("total_enc"))  # wide transformation
+        # .orderBy("total_enc", ascending=False)  # wide transformation
+    )
+
+    to_path = "output_data/encounters/parquet/{yr}/{mon:02d}/{day:02d}".format(
+        yr=date.today().year,
+        mon=date.today().month,
+        day=date.today().day,
+    )
+    logger.info(f"Save as parquet to {to_path}...")
+    (
+        enc_counts
+        # .limit(21)  # filtered for speed
+        .write
+        .parquet(to_path,
+                 mode='overwrite',
+                 partitionBy=['enc_year'])  # action
+    )
+
+    delta_path = "output_data/encounters/delta/{yr}/{mon:02d}/{day:02d}".format(
+        yr=date.today().year,
+        mon=date.today().month,
+        day=date.today().day,
+    )
+    logger.info(f"Save as delta to {delta_path}...")
+    (
+        enc_counts
+        .write
+        .format("delta")
+        .mode("append")
+        # .option("mergeSchema", "true")
+        .save(delta_path)  # action
+    )
+
+    encounters_delta = (
+        spark_session
+        .read
+        .format("delta")
+        .load(delta_path)
+    )
+    # encounters_delta.show(n=21, truncate=False)
+    encounters_delta.createOrReplaceTempView("encounters_delta")
+
+    spark_session.sql("""
+        SELECT  enc_year,
+                COUNT(*) AS TOTAL
+        FROM    encounters_delta
+        GROUP BY enc_year
+        ORDER BY enc_year
+    """).show(n=21, truncate=False)
+
+    logger.info("Show transaction history...")
+    delta_table = DeltaTable.forPath(spark_session, delta_path)
+    (
+        delta_table
+        .history(3)
+        .select("version", "timestamp", "operation", "operationParameters")
+        .show(truncate=False)
+    )
+
+    logger.info("Time travel to prior timestamp")
+    (
+        spark_session
+        .read
+        .format("delta")
+        .option("timestampAsOf", "2021-10-18 03:57:23.517")  # timestamp after table creation
+        .load(delta_path)
+        .show()
+    )
+
+    logger.info("Time travel to prior version")
+    (
+        spark_session
+        .read
+        .format("delta")
+        .option("versionAsOf", "1")
+        .load(delta_path)
+        .show()
+    )
+
+    # TODO: Stream (update mode) to PostgreSQL table
+
     logger.info(f"Load process finished in {datetime.now() - start}")
     input("Press enter to exit...")  # keep alive for Spark UI
 
@@ -231,4 +379,4 @@ def main(filepath: str, output_path: str) -> None:
 
 if __name__ == "__main__":
 
-    main()
+    cli()

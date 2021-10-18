@@ -8,7 +8,6 @@ services:
         - POSTGRES_USER=sa
         - POSTGRES_PASSWORD=pwd
         - POSTGRES_DB=psycodb
-  # TODO: Add PostgreSQL data source
   stage_data:
     image: stage_data
     build:
@@ -22,7 +21,9 @@ services:
       "-c",
       "/opt/spark/bin/spark-submit \
       --name stage_data \
+      --conf spark.jars.packages=io.delta:delta-core_2.12:1.0.0 \
       local:///opt/spark/stage_data/main.py \
+      delta-lake \
       --filepath s3a://bangkok/departuredelays.csv
       --output_path s3a://condesa/departuredelays"
     ]
@@ -31,8 +32,8 @@ services:
     env_file: .env
     environment:
       - LOG_LEVEL=WARN
-      - POSTGRES_DB_URL=postgresql://sa:pwd@pgsql-spark/pyscodb
-      - POSTGRES_JDBC_URL=jdbc:postgresql://pgsql-spark/pyscodb?user=sa&password=pwd
+      - POSTGRES_DB_URL=postgresql://sa:pwd@pgsql-spark/psycodb
+      - POSTGRES_JDBC_URL=jdbc:postgresql://pgsql-spark/psycodb?user=sa&password=pwd
     volumes:
       - ./local_config:/opt/spark/conf
       # - ./local_hive:/opt/spark/hive_warehouse
