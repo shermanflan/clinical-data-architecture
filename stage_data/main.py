@@ -25,7 +25,7 @@ from pyspark.sql.types import (
 )
 
 from lib import logger, SPARK_LOG_LEVEL
-from lib.etl import stage_data
+from lib.etl import stage_data, load_vitals
 from lib.schema import ENCOUNTERS, OBSERVATIONS, PATIENTS
 
 
@@ -43,12 +43,13 @@ spark_session = (
     SparkSession
     .builder
     .appName("stage_data")
-    .config(f"fs.s3a.bucket.{os.environ['P3_BUCKET']}.access.key", os.environ['P3_AWS_ACCESS_KEY'])
-    .config(f"fs.s3a.bucket.{os.environ['P3_BUCKET']}.secret.key", os.environ['P3_AWS_SECRET_KEY'])
-    .config("spark.hadoop.fs.s3a.bucket.bangkok.access.key", os.environ['BK_AWS_ACCESS_KEY'])
-    .config("spark.hadoop.fs.s3a.bucket.bangkok.secret.key", os.environ['BK_AWS_SECRET_KEY'])
-    .config("spark.hadoop.fs.s3a.bucket.condesa.access.key", os.environ['CO_AWS_ACCESS_KEY'])
-    .config("spark.hadoop.fs.s3a.bucket.condesa.secret.key", os.environ['CO_AWS_SECRET_KEY'])
+    # AWS bucket-specific authorization
+    # .config(f"fs.s3a.bucket.{os.environ['P3_BUCKET']}.access.key", os.environ['P3_AWS_ACCESS_KEY'])
+    # .config(f"fs.s3a.bucket.{os.environ['P3_BUCKET']}.secret.key", os.environ['P3_AWS_SECRET_KEY'])
+    # .config("spark.hadoop.fs.s3a.bucket.bangkok.access.key", os.environ['BK_AWS_ACCESS_KEY'])
+    # .config("spark.hadoop.fs.s3a.bucket.bangkok.secret.key", os.environ['BK_AWS_SECRET_KEY'])
+    # .config("spark.hadoop.fs.s3a.bucket.condesa.access.key", os.environ['CO_AWS_ACCESS_KEY'])
+    # .config("spark.hadoop.fs.s3a.bucket.condesa.secret.key", os.environ['CO_AWS_SECRET_KEY'])
     # TODO: S3A Optimizations
     # .config("spark.hadoop.fs.s3a.committer.name", "directory")
     # .config("spark.sql.sources.commitProtocolClass",
@@ -79,9 +80,14 @@ def cli():
 @cli.command()
 @click.option('--filepath', required=False, help='The input file path')
 @click.option('--output_path', required=False, help='The output file path')
-def staging(filepath: str, output_path: str) -> None:
-    logger.info(f"Staging to parquet")
-    stage_data(spark_session)
+def acquire_vitals(filepath: str, output_path: str) -> None:
+
+    start = datetime.now()
+    logger.info(f"Processing vitals")
+    load_vitals(spark_session, filepath)
+
+    logger.info(f"Load process finished in {datetime.now() - start}")
+    input("Press enter to exit...")  # keep alive for Spark UI
 
 
 @cli.command()

@@ -1,7 +1,10 @@
 version: "3.8"
 services:
   pgsql-spark:
-    image: postgres:11
+    image: pgsql-spark
+    build:
+      context: .
+      dockerfile: Dockerfile-postgresql
     ports:
         - 5432:5432
     environment:
@@ -22,11 +25,14 @@ services:
       "/opt/spark/bin/spark-submit \
       --name stage_data \
       --conf spark.jars.packages=io.delta:delta-core_2.12:1.0.0 \
+      --conf spark.jars.ivy=/tmp/.ivy \
       local:///opt/spark/stage_data/main.py \
-      staging \
-      --filepath s3a://bangkok/departuredelays.csv
-      --output_path s3a://condesa/departuredelays"
+      acquire-vitals \
+      --filepath /opt/spark/work-dir/input_data/raw/healthjump/vitals/2021/10/18/aledade_vitals_rh_20211018.gz
+      --output_path /opt/spark/work-dir/output_data"
     ]
+      # --filepath s3a://bangkok/departuredelays.csv
+      # --output_path s3a://condesa/departuredelays"
     depends_on:
       - pgsql-spark
     env_file: .env
@@ -38,6 +44,7 @@ services:
     volumes:
       - ./local_config:/opt/spark/conf
       # - ./local_hive:/opt/spark/hive_warehouse
-      - ./sample_data/synthea_1m_fhir_3_0_May_24/output_1/csv:/opt/spark/work-dir/sample_data/output_1
-      - ./sample_data/synthea_1m_fhir_3_0_May_24/output_2/csv:/opt/spark/work-dir/sample_data/output_2
+      # - ./sample_data/synthea_1m_fhir_3_0_May_24/output_1/csv:/opt/spark/work-dir/sample_data/output_1
+      # - ./sample_data/synthea_1m_fhir_3_0_May_24/output_2/csv:/opt/spark/work-dir/sample_data/output_2
+      - ./sample_data/input_data:/opt/spark/work-dir/input_data
       - ./sample_data/output_data:/opt/spark/work-dir/output_data

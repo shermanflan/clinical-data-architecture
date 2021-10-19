@@ -28,4 +28,4 @@ ARG spark_uid=185
 
 # Leave as root to start Thrift server
 # ${SPARK_HOME}/sbin/start-thriftserver.sh
-# USER ${spark_uid}
+USER ${spark_uid}
