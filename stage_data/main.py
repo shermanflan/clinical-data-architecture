@@ -7,15 +7,15 @@ docker run --rm -it --name test_pyspark spark-ingest:latest /bin/bash
 ./bin/spark-submit spark-ingest/main.py --filepath ./examples/src/main/python/pi.py
 """
 from datetime import datetime, date, timedelta
-import logging
 import os
 
-# import boto3
+import boto3
 import click
 from delta.tables import DeltaTable
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import (
-    asc, col, concat, count, expr, lit, sum as spark_sum, to_timestamp,
+    asc, col, concat, count, expr, lit,
+    sum as spark_sum, to_timestamp,
     year as spark_year
 )
 from pyspark.sql.types import (
@@ -24,33 +24,51 @@ from pyspark.sql.types import (
     StructField,
 )
 
-logging.basicConfig(format='%(asctime)s %(levelname)s [%(name)s]: %(message)s',
-                    datefmt='%Y-%m-%d %I:%M:%S %p', level=logging.INFO)
-logger = logging.getLogger(__name__)
-LOG_LEVEL = os.environ.get('LOG_LEVEL', 'WARN')
+from lib import logger, SPARK_LOG_LEVEL
+from lib.etl import stage_data
+from lib.schema import ENCOUNTERS, OBSERVATIONS, PATIENTS
 
-# Programmatic way to define a schema
-# ID,DATE,PATIENT,CODE,DESCRIPTION,REASONCODE,REASONDESCRIPTION
-ENCOUNTER = StructType([
-    StructField('ID', StringType(), True),
-    StructField('DATE', DateType(), True),
-    StructField('PATIENT', StringType(), True),
-    StructField('CODE', StringType(), True),
-    StructField('DESCRIPTION', StringType(), True),
-    StructField('REASONCODE', StringType(), True),
-    StructField('REASONDESCRIPTION', StringType(), True),
-])
 
-# DATE,PATIENT,ENCOUNTER,CODE,DESCRIPTION,VALUE,UNITS
-VITALS = """
-    `DATE`        Date,
-    `PATIENT`     String,
-    `ENCOUNTER`   String,
-    `CODE`        String,
-    `DESCRIPTION` String,
-    `VALUE`       Decimal(12, 2),
-    `UNITS`       String
 """
+To configure AWS bucket-specific authorization, use the
+`fs.s3a.bucket.[bucket name].access.key` configuration setting.
+
+As specified here:
+- https://hadoop.apache.org/docs/current2/hadoop-aws/tools/hadoop-aws/index.html#Configuring_different_S3_buckets
+
+TODO: Consider optimizing the S3A for I/O.
+- https://spark.apache.org/docs/3.1.1/cloud-integration.html#recommended-settings-for-writing-to-object-stores
+"""
+spark_session = (
+    SparkSession
+    .builder
+    .appName("stage_data")
+    .config(f"fs.s3a.bucket.{os.environ['P3_BUCKET']}.access.key", os.environ['P3_AWS_ACCESS_KEY'])
+    .config(f"fs.s3a.bucket.{os.environ['P3_BUCKET']}.secret.key", os.environ['P3_AWS_SECRET_KEY'])
+    .config("spark.hadoop.fs.s3a.bucket.bangkok.access.key", os.environ['BK_AWS_ACCESS_KEY'])
+    .config("spark.hadoop.fs.s3a.bucket.bangkok.secret.key", os.environ['BK_AWS_SECRET_KEY'])
+    .config("spark.hadoop.fs.s3a.bucket.condesa.access.key", os.environ['CO_AWS_ACCESS_KEY'])
+    .config("spark.hadoop.fs.s3a.bucket.condesa.secret.key", os.environ['CO_AWS_SECRET_KEY'])
+    # TODO: S3A Optimizations
+    # .config("spark.hadoop.fs.s3a.committer.name", "directory")
+    # .config("spark.sql.sources.commitProtocolClass",
+    #         "org.apache.spark.internal.io.cloud.PathOutputCommitProtocol")
+    # .config("spark.sql.parquet.output.committer.class",
+    #         "org.apache.spark.internal.io.cloud.BindingParquetOutputCommitter")
+    # TODO: Parquet Optimizations
+    # .config("spark.hadoop.parquet.enable.summary-metadata", "false")
+    # .config("spark.sql.parquet.mergeSchema", "false")
+    # .config("spark.sql.parquet.filterPushdown", "true")
+    # .config("spark.sql.hive.metastorePartitionPruning", "true")
+    # Specify different location for Hive metastore
+    # .config("spark.sql.warehouse.dir", "/opt/spark/hive_warehouse")
+    # .config("spark.sql.catalogImplementation", "hive")
+    # TODO: Delta lake
+    .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
+    .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog")
+    .getOrCreate()
+)
+spark_session.sparkContext.setLogLevel(SPARK_LOG_LEVEL)
 
 
 @click.group()
@@ -61,45 +79,17 @@ def cli():
 @cli.command()
 @click.option('--filepath', required=False, help='The input file path')
 @click.option('--output_path', required=False, help='The output file path')
+def staging(filepath: str, output_path: str) -> None:
+    logger.info(f"Staging to parquet")
+    stage_data(spark_session)
+
+
+@cli.command()
+@click.option('--filepath', required=False, help='The input file path')
+@click.option('--output_path', required=False, help='The output file path')
 def examples(filepath: str, output_path: str) -> None:
     """
-    To configure AWS bucket-specific authorization, use the
-    `fs.s3a.bucket.[bucket name].access.key` configuration setting.
-
-    As specified here:
-    - https://hadoop.apache.org/docs/current2/hadoop-aws/tools/hadoop-aws/index.html#Configuring_different_S3_buckets
-
-    TODO: Consider optimizing the S3A for I/O.
-    - https://spark.apache.org/docs/3.1.1/cloud-integration.html#recommended-settings-for-writing-to-object-stores
     """
-    spark_session = (
-        SparkSession
-        .builder
-        .appName("stage_data")
-        .config(f"fs.s3a.bucket.{os.environ['P3_BUCKET']}.access.key", os.environ['P3_AWS_ACCESS_KEY'])
-        .config(f"fs.s3a.bucket.{os.environ['P3_BUCKET']}.secret.key", os.environ['P3_AWS_SECRET_KEY'])
-        .config("spark.hadoop.fs.s3a.bucket.bangkok.access.key", os.environ['BK_AWS_ACCESS_KEY'])
-        .config("spark.hadoop.fs.s3a.bucket.bangkok.secret.key", os.environ['BK_AWS_SECRET_KEY'])
-        .config("spark.hadoop.fs.s3a.bucket.condesa.access.key", os.environ['CO_AWS_ACCESS_KEY'])
-        .config("spark.hadoop.fs.s3a.bucket.condesa.secret.key", os.environ['CO_AWS_SECRET_KEY'])
-        # TODO: S3A Optimizations
-        # .config("spark.hadoop.fs.s3a.committer.name", "directory")
-        # .config("spark.sql.sources.commitProtocolClass",
-        #         "org.apache.spark.internal.io.cloud.PathOutputCommitProtocol")
-        # .config("spark.sql.parquet.output.committer.class",
-        #         "org.apache.spark.internal.io.cloud.BindingParquetOutputCommitter")
-        # TODO: Parquet Optimizations
-        # .config("spark.hadoop.parquet.enable.summary-metadata", "false")
-        # .config("spark.sql.parquet.mergeSchema", "false")
-        # .config("spark.sql.parquet.filterPushdown", "true")
-        # .config("spark.sql.hive.metastorePartitionPruning", "true")
-        # Specify different location for Hive metastore
-        # .config("spark.sql.warehouse.dir", "/opt/spark/hive_warehouse")
-        # .config("spark.sql.catalogImplementation", "hive")
-        .getOrCreate()
-    )
-    spark_session.sparkContext.setLogLevel(LOG_LEVEL)
-
     start = datetime.now()
     logger.info(f"Load process started")
 
@@ -112,7 +102,7 @@ def examples(filepath: str, output_path: str) -> None:
         .read
         # .option("mode", "FAILFAST")  # Exit if any errors
         # .option("nullValue", "")  # Replace any null data with quotes
-        .csv('sample_data/output_1/encounters.csv', header=True, schema=ENCOUNTER)
+        .csv('sample_data/output_1/encounters.csv', header=True, schema=ENCOUNTERS)
     )
 
     # TODO: Read across practices
@@ -121,13 +111,13 @@ def examples(filepath: str, output_path: str) -> None:
     vitals_1 = (
         spark_session
         .read
-        .csv('sample_data/output_1/observations.csv', header=True, schema=VITALS)
+        .csv('sample_data/output_1/observations.csv', header=True, schema=OBSERVATIONS)
         .withColumn("PRAC_ID", lit("output_1"))
     )
     vitals_2 = (
         spark_session
         .read
-        .csv('sample_data/output_2/observations.csv', header=True, schema=VITALS)
+        .csv('sample_data/output_2/observations.csv', header=True, schema=OBSERVATIONS)
         .withColumn("PRAC_ID", lit("output_2"))
     )
 
@@ -257,16 +247,6 @@ def delta_lake(filepath: str, output_path: str) -> None:
     """
     Delta lake examples
     """
-    spark_session = (
-        SparkSession
-        .builder
-        .appName("stage_data")
-        .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
-        .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog")
-        .getOrCreate()
-    )
-    spark_session.sparkContext.setLogLevel(LOG_LEVEL)
-
     start = datetime.now()
     logger.info(f"Load process started")
 
@@ -277,7 +257,7 @@ def delta_lake(filepath: str, output_path: str) -> None:
         .read
         # .option("mode", "FAILFAST")  # Exit if any errors
         # .option("nullValue", "")  # Replace any null data with quotes
-        .csv('sample_data/output_1/encounters.csv', header=True, schema=ENCOUNTER)
+        .csv('sample_data/output_1/encounters.csv', header=True, schema=ENCOUNTERS)
     )
 
     enc_counts = (
@@ -354,7 +334,7 @@ def delta_lake(filepath: str, output_path: str) -> None:
         spark_session
         .read
         .format("delta")
-        .option("timestampAsOf", "2021-10-18 03:57:23.517")  # timestamp after table creation
+        .option("timestampAsOf", "2021-10-19 01:22:16.924")  # timestamp after table creation
         .load(delta_path)
         .show()
     )

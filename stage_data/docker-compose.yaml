@@ -23,7 +23,7 @@ services:
       --name stage_data \
       --conf spark.jars.packages=io.delta:delta-core_2.12:1.0.0 \
       local:///opt/spark/stage_data/main.py \
-      delta-lake \
+      staging \
       --filepath s3a://bangkok/departuredelays.csv
       --output_path s3a://condesa/departuredelays"
     ]
@@ -31,7 +31,8 @@ services:
       - pgsql-spark
     env_file: .env
     environment:
-      - LOG_LEVEL=WARN
+      - LOG_LEVEL=INFO
+      - SPARK_LOG_LEVEL=WARN
       - POSTGRES_DB_URL=postgresql://sa:pwd@pgsql-spark/psycodb
       - POSTGRES_JDBC_URL=jdbc:postgresql://pgsql-spark/psycodb?user=sa&password=pwd
     volumes:
