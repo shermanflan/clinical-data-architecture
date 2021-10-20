@@ -25,7 +25,9 @@ from pyspark.sql.types import (
 )
 
 from lib import logger, SPARK_LOG_LEVEL
-from lib.etl import stage_data, load_vitals
+from lib.etl import (
+    stage_data, load_vitals, upsert_vitals, time_travel
+)
 from lib.schema import ENCOUNTERS, OBSERVATIONS, PATIENTS
 
 
@@ -79,14 +81,27 @@ def cli():
 
 @cli.command()
 @click.option('--filepath', required=False, help='The input file path')
+@click.option('--filepath2', required=False, help='The input file path')
 @click.option('--output_path', required=False, help='The output file path')
-def acquire_vitals(filepath: str, output_path: str) -> None:
+def acquire_vitals(filepath: str, filepath2: str, output_path: str) -> None:
 
     start = datetime.now()
-    logger.info(f"Processing vitals")
-    load_vitals(spark_session, filepath, output_path)
 
+    logger.info(f"Processing vitals: {filepath}")
+    load_vitals(spark_session, filepath, output_path)
     logger.info(f"Load process finished in {datetime.now() - start}")
+
+    logger.info(f"Processing vitals: {filepath2}")
+    delta_path = upsert_vitals(spark_session, filepath2, output_path)
+    logger.info(f"Load process finished in {datetime.now() - start}")
+
+    logger.info(f"Time-travel vitals: {delta_path}")
+    time_travel(
+        spark_session,
+        delta_path  # ="/opt/spark/work-dir/output_data/public/vitals/delta"
+    )
+    logger.info(f"Load process finished in {datetime.now() - start}")
+
     input("Press enter to exit...")  # keep alive for Spark UI
 
 
