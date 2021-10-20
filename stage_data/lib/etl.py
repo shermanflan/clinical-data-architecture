@@ -1,3 +1,4 @@
+import os
 from datetime import datetime, date, timedelta
 
 from pyspark.sql.functions import (
@@ -10,7 +11,7 @@ from lib.path import get_lake_path
 from lib.schema import ENCOUNTERS, OBSERVATIONS, VITALS
 
 
-def load_vitals(session, input_path) -> None:
+def load_vitals(session, input_path: str, output_path: str) -> None:
     """
 
     :return:
@@ -24,6 +25,33 @@ def load_vitals(session, input_path) -> None:
     )
 
     # raw.show(n=21, truncate=False)
+
+    stage_path = (
+        "{root}/stage/vitals/parquet/{Y}/{M:02d}/{D:02d}"
+        .format(root=output_path,
+                Y=date.today().year,
+                M=date.today().month,
+                D=date.today().day)
+    )
+
+    logger.info(f"Stage vitals as parquet, partitioned on prac")
+    logger.info(f"Save to {stage_path}...")
+    (
+        raw
+        .write
+        .parquet(stage_path,
+                 mode='overwrite',
+                 partitionBy=['client_id'])  # action
+    )
+
+    logger.info(f"Read from parquet, partitioned on prac")
+    stage = (
+        session
+        .read
+        .parquet(stage_path)
+    )
+
+    # stage.show(n=21, truncate=False)
 
     # TODO: Exception handling, need a try_cast UDF?
     # logger.info(f"Try cast date/time")
@@ -50,27 +78,41 @@ def load_vitals(session, input_path) -> None:
     #     .show(n=21, truncate=False)
     # )
 
-    logger.info(f"Conform vitals")
-    raw.createOrReplaceTempView("raw_vitals")
+    logger.info("Load MPMI and cache to memory")
+    mpmi = (
+        session
+        .read
+        .jdbc(url=os.environ['POSTGRES_JDBC_URL'],
+              table='public.mc_practice_master_info')
+        .filter('enabled = true AND ale_prac_id IS NOT NULL')
+        # .filter(col('ale_prac_id').isNotNull())
+        .select('document_oid', 'ale_prac_id')
+        .distinct()
+        .cache()
+    )
+    mpmi.createOrReplaceTempView("mpmi")
+    # mpmi.show(n=21)
 
-    # TODO: Load MPMI as a DataFrame and use a broadcast join
-    # TODO: Cache/Persist MPMI to memory, disk
-    # TODO: De-duplicate by comparing row hash
+    logger.info(f"Conform vitals")
+    stage.createOrReplaceTempView("stage_vitals")
+
+    # TODO: De-duplicate by comparing row hash against delta cq
     conformed = session.sql("""
-        SELECT  client_id,
-                patient_id,
-                encounter_id,
+        SELECT  v.client_id,
+                m.ale_prac_id AS source_ale_prac_id,
+                v.encounter_id,
+                v.patient_id,
                 --height_in,
                 --weight_lbs,
                 --bp_systolic,
                 --bp_diastolic,
                 --bmi,
                 STACK(5,
-                      'Height', '8302-2', height_in, '[in_i]',
-                      'Body Weight', '29463-7', weight_lbs, '[lb_av]', 
-                      'BP Systolic', '8480-6', bp_systolic, 'mm[Hg]',
-                      'BP Diastolic', '8462-4', bp_diastolic, 'mm[Hg]',
-                      'BMI (Body Mass Index)', '39156-5', bmi, 'kg/m2'
+                      'Height', '8302-2', v.height_in, '[in_i]',
+                      'Body Weight', '29463-7', v.weight_lbs, '[lb_av]', 
+                      'BP Systolic', '8480-6', v.bp_systolic, 'mm[Hg]',
+                      'BP Diastolic', '8462-4', v.bp_diastolic, 'mm[Hg]',
+                      'BMI (Body Mass Index)', '39156-5', v.bmi, 'kg/m2'
                 ) AS (name, code, value, unit),
                 'LOINC' as code_system_name,
                 '2.16.840.1.113883.6.1' as code_system_oid,
@@ -78,21 +120,65 @@ def load_vitals(session, input_path) -> None:
                 --hj_modify_timestamp,
                 --service_date,
                 --service_time,
-                IF (service_time IS NOT NULL,
-                    to_timestamp(concat(service_date, ' ', service_time),
+                IF (v.service_time IS NOT NULL,
+                    to_timestamp(concat(v.service_date, ' ', v.service_time),
                                 'yyyyMMdd HH:mm:ss'),
-                    to_timestamp(service_date, 'yyyyMMdd')
+                    to_timestamp(v.service_date, 'yyyyMMdd')
                 ) AS observation_date,
-                row_hash
-        FROM    raw_vitals
+                v.row_hash
+        FROM    stage_vitals AS v
+            INNER JOIN mpmi AS m
+                ON v.client_id = m.document_oid
     """)
 
+    # conformed.show(n=21, truncate=False)
+
+    delta_path = (
+        "{root}/public/vitals/delta/{Y}/{M:02d}/{D:02d}"
+        .format(root=output_path,
+                Y=date.today().year,
+                M=date.today().month,
+                D=date.today().day)
+    )
+    # TODO: Upsert to delta
+    # TODO: Create from schema
+    logger.info(f"Publish vitals delta")
+    # TODO: Patient match, load demographics cached?
+    # TODO: Store demographic matches as delta, partitioned by
+    # client_id, patient_id%8?
     (
         conformed
         .filter(conformed.value.isNotNull())
-        # .filter('value IS NOT NULL')
-        .show(n=21, truncate=False)
+        .select('client_id',
+                'source_ale_prac_id',
+                'encounter_id',
+                'patient_id',
+                'name',
+                'code',
+                'code_system_name',
+                'code_system_oid',
+                'value',
+                'unit',
+                'observation_date',
+                'row_hash')
+        .write
+        .partitionBy('source_ale_prac_id')
+        .format('delta')
+        # TODO: What other modes?
+        .mode("append")
+        # .option("mergeSchema", "true")
+        .save(delta_path)
     )
+
+    logger.info(f"Read vitals delta")
+    delta = (
+        session
+        .read
+        .format("delta")
+        .load(delta_path)
+    )
+    # delta.createOrReplaceTempView("delta_vitals")
+    delta.show(n=21, truncate=False)
 
 
 def stage_data(session) -> None:

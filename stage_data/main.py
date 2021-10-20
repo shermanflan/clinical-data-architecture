@@ -84,7 +84,7 @@ def acquire_vitals(filepath: str, output_path: str) -> None:
 
     start = datetime.now()
     logger.info(f"Processing vitals")
-    load_vitals(spark_session, filepath)
+    load_vitals(spark_session, filepath, output_path)
 
     logger.info(f"Load process finished in {datetime.now() - start}")
     input("Press enter to exit...")  # keep alive for Spark UI

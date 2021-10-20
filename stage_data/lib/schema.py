@@ -1,7 +1,7 @@
 from pyspark.sql.types import (
     ArrayType, BooleanType, DateType, DecimalType,
-    IntegerType, FloatType, StringType, StructType,
-    StructField,
+    IntegerType, FloatType, LongType, StringType,
+    StructType, StructField, TimestampType
 )
 
 VITALS = StructType([
@@ -36,6 +36,31 @@ VITALS = StructType([
     StructField('hj_modify_timestamp', StringType(), nullable=True),
     StructField('client_vitals_id', StringType(), nullable=True),
     StructField('row_hash', StringType(), nullable=True),
+])
+
+# TODO: Create delta table from schema
+# TODO: How to setup constraints (update trigger, sequence)?
+CQ_VITALS = StructType([
+    # StructField('id', LongType(), nullable=True),
+    StructField('source_ale_prac_id', LongType(), nullable=True),
+    StructField('encounter_id', LongType(), nullable=True),
+    StructField('pt_id', LongType(), nullable=True),
+    StructField('name', StringType(), nullable=True),
+    StructField('code', StringType(), nullable=True),
+    StructField('code_system_name', StringType(), nullable=True),
+    StructField('code_system_oid', StringType(), nullable=True),
+    StructField('orig_code', StringType(), nullable=True),
+    StructField('orig_code_system_name', StringType(), nullable=True),
+    StructField('value', StringType(), nullable=True),
+    StructField('unit', StringType(), nullable=True),
+    StructField('status', StringType(), nullable=True),
+    StructField('observation_date', TimestampType(), nullable=True),
+    # StructField('cq_document_id', LongType(), nullable=True),
+    # StructField('content_lineage_id', LongType(), nullable=True),
+    StructField('source_name', StringType(), nullable=True),
+    StructField('source_guid', StringType(), nullable=True),
+    # StructField('created_at', TimestampType(), nullable=True),
+    # StructField('updated_at', TimestampType(), nullable=True),
 ])
 
 ENCOUNTERS = StructType([
