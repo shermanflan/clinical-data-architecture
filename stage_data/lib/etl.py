@@ -1,10 +1,11 @@
-import os
 from datetime import datetime, date, timedelta
+import os
+from os.path import basename
 
 from delta.tables import DeltaTable
 from pyspark.sql.functions import (
-    asc, col, concat, count, expr, lit,
-    sum, to_timestamp, to_date, year
+    asc, col, concat, count, countDistinct, expr,
+    lit, sum, to_timestamp, to_date, year
 )
 from pyspark.sql.types import (
     ArrayType, BooleanType, DateType, DecimalType,
@@ -14,7 +15,7 @@ from pyspark.sql.types import (
 
 from lib import logger
 from lib.path import get_lake_path
-from lib.schema import ENCOUNTERS, OBSERVATIONS, VITALS, CQ_VITALS
+from lib.schema import VITALS, CQ_VITALS
 
 
 def create_vitals_delta(session, delta_root: str) -> str:
@@ -25,6 +26,7 @@ def create_vitals_delta(session, delta_root: str) -> str:
     delta_path = "{root}/public/vitals/delta".format(root=delta_root)
 
     # TODO: Create from schema
+    # TODO: How to setup constraints (update trigger, sequence)? See generated columns
     (
         DeltaTable
         .createIfNotExists(session)
@@ -57,6 +59,10 @@ def create_vitals_delta(session, delta_root: str) -> str:
         .read
         .format("delta")
         .load(delta_path)  # As DataFrame
+        .select('source_ale_prac_id', 'patient_id')
+        .groupBy('source_ale_prac_id')
+        .agg(countDistinct('patient_id').alias("total_pt"))  # action
+        .orderBy("total_pt", ascending=False)  # wide transformation
         .show()
     )
     return delta_path
@@ -89,6 +95,7 @@ def stage_data(session, input_path: str, output_path: str) -> None:
         # .option("nullValue", "")  # Replace any null data with quotes
         .csv(input_path,
              sep='|', header=False, schema=VITALS)
+        # .withColumn("source", lit(basename(input_path)))
     )
 
     stage_path = (

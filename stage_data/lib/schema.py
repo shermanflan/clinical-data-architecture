@@ -38,8 +38,26 @@ VITALS = StructType([
     StructField('row_hash', StringType(), nullable=True),
 ])
 
-# TODO: Create delta table from schema
-# TODO: How to setup constraints (update trigger, sequence)? See generated columns
+PATIENTS = """
+    ID          String,
+    BIRTHDATE   Date,
+    DEATHDATE   Date,
+    SSN         String,
+    DRIVERS     String,
+    PASSPORT    Boolean,
+    PREFIX      String,
+    FIRST       String,
+    LAST        String,
+    SUFFIX      String,
+    MAIDEN      String,
+    MARITAL     String,
+    RACE        String,
+    ETHNICITY   String,
+    GENDER      String,
+    BIRTHPLACE  String,
+    ADDRESS     String
+"""
+
 CQ_VITALS = StructType([
     # StructField('id', LongType(), nullable=True),
     StructField('client_id', StringType(), nullable=True),
@@ -64,43 +82,3 @@ CQ_VITALS = StructType([
     # StructField('created_at', TimestampType(), nullable=True),
     # StructField('updated_at', TimestampType(), nullable=True),
 ])
-
-ENCOUNTERS = StructType([
-    StructField('ID', StringType(), True),
-    StructField('DATE', DateType(), True),
-    StructField('PATIENT', StringType(), True),
-    StructField('CODE', StringType(), True),
-    StructField('DESCRIPTION', StringType(), True),
-    StructField('REASONCODE', StringType(), True),
-    StructField('REASONDESCRIPTION', StringType(), True),
-])
-
-OBSERVATIONS = """
-    `DATE`        Date,
-    `PATIENT`     String,
-    `ENCOUNTER`   String,
-    `CODE`        String,
-    `DESCRIPTION` String,
-    `VALUE`       Decimal(12, 2),
-    `UNITS`       String
-"""
-
-PATIENTS = """
-    ID          String,
-    BIRTHDATE   Date,
-    DEATHDATE   Date,
-    SSN         String,
-    DRIVERS     String,
-    PASSPORT    Boolean,
-    PREFIX      String,
-    FIRST       String,
-    LAST        String,
-    SUFFIX      String,
-    MAIDEN      String,
-    MARITAL     String,
-    RACE        String,
-    ETHNICITY   String,
-    GENDER      String,
-    BIRTHPLACE  String,
-    ADDRESS     String
-"""
