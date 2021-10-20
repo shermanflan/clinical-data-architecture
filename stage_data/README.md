@@ -15,6 +15,21 @@ showcasing the feature this architecture offers for acquiring data at scale.
 - [PySpark Examples - SparkSQL](#spark-sql)
 - [PySpark Examples - Delta Lake](#delta-lake)
 
+## Overview
+
+## Why PySpark?
+- Unified, standardized domain-specific-language for ETL
+- Focus on business logic and delegate scalability and division of work to the platform
+- Handle growing data volumes gracefully
+- Support batch and streaming workloads
+- Open source
+
+## Why Delta Lake?
+- "Time travel" feature supports inspecting previous versions of data.
+- Supports "CRUD" so that advanced `Merge`, `Update`, and `Delete` DML operations can be implemented.
+- Supports the enforcement of data schemas and schema drift
+- Open source
+
 ## How it Works
 ![Spark on K8s](https://spark.apache.org/docs/latest/img/k8s-cluster-mode.png)
 
@@ -22,10 +37,18 @@ showcasing the feature this architecture offers for acquiring data at scale.
 ./bin/docker-image-tool.sh -t 3.1.1 build
 ```
 
+## Proposed Architecture
+
+## Proposed Approach
+
+## Propose Implementation Plan (crawl, walk, run)
+
+## How to Run the Demo
+
 ## Appendix
 This section contains examples on general PySpark usage. Both a fluent
 API (Pandas-like) and an `ANSI:2003`-compliant SQL interface is
-supported. In a sense PySpark's DataFrame API unifies programmatic
+supported. In a sense, PySpark's DataFrame API unifies programmatic
 access to Spark functionality, rather than having to use distinct
 tools (`Python` and `dbt` for example).
 
@@ -44,7 +67,7 @@ ENCOUNTERS = StructType([
 ])
 ```
 
-2. Read a CSV into a DataFrame using a pre-defined schema. 
+2. Read a CSV into a `DataFrame` using a pre-defined schema. 
 ```python
 encounters_1 = (
     spark_session
@@ -56,7 +79,7 @@ encounters_1 = (
          schema=ENCOUNTERS)
 )
 ```
-2. Transform and aggregate a DataFrame
+2. Transform and aggregate a `DataFrame`.
 ```python
 enc_counts = (
     encounters_1
@@ -80,7 +103,7 @@ enc_counts = (
              partitionBy=['PRAC_ID'])  # action
 )
 ```
-4. Save a `DataFrame` to a PostgreSQL.
+4. Save a `DataFrame` to a PostgreSQL database via `JDBC`.
 ```python
 (
     bp_counts
@@ -92,7 +115,7 @@ enc_counts = (
 ```
 
 ### <a name='spark-sql'></a>PySpark 101 - Spark SQL
-Spark SQL complies with `ANSI:2003` and can be preferable when implementing complex transformations.
+SparkSQL complies with `ANSI:2003` and can be preferable when implementing complex transformations.
 1. Create a database in the `Hive` metastore (i.e. data dictionary).
 ```python
 spark_session.sql("CREATE DATABASE clinical_data")
@@ -107,7 +130,7 @@ spark_session.sql("USE clinical_data")
     .saveAsTable("encounter_codes")  # action
 )
 ```
-3. Create an unmanaged table (only schema managed in `Hive`)
+3. Create an unmanaged table (only schema is managed in `Hive`)
 ```python
 spark_session.sql("""
     CREATE TABLE encounters
@@ -135,7 +158,7 @@ spark_session.sql("""
     .saveAsTable("vitals_1")  # action
 )
 ```
-5. Create a global (visible across Spark sessions) and local temporary views. Tables persist after session termination but views disappear.
+5. Create global (visible across Spark sessions) and local temporary views. Tables persist after session termination but views disappear.
 ```python
 spark_session.sql("""
     CREATE OR REPLACE GLOBAL TEMP VIEW vw_vitals_1

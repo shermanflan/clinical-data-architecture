@@ -1,7 +1,5 @@
 """
 Usage:
-- From docker interactive against bitnami docker-compose cluster:
-docker run --rm -it --name test_pyspark --network container:spark_ingest_spark_1 spark-ingest:latest /bin/bash
 - From Spark 3.1.1 base container with Python bindings:
 docker run --rm -it --name test_pyspark spark-ingest:latest /bin/bash
 ./bin/spark-submit spark-ingest/main.py --filepath ./examples/src/main/python/pi.py
@@ -11,17 +9,11 @@ import os
 
 import boto3
 import click
-from delta.tables import DeltaTable
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import (
-    asc, col, concat, count, expr, lit,
-    sum as spark_sum, to_timestamp,
-    year as spark_year
-)
 
 from lib import logger, SPARK_LOG_LEVEL
 from lib.etl import (
-    create_vitals_delta, cache_mpmi, stage_data, load_vitals,
+    create_vitals_delta, cache_mpmi, load_vitals,
     upsert_vitals, time_travel
 )
 

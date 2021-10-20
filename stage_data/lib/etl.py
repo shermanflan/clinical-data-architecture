@@ -69,6 +69,8 @@ def create_vitals_delta(session, delta_root: str) -> str:
 
 
 def cache_mpmi(session) -> None:
+    """
+    """
     logger.info("Load mc_practice_master_info and cache to memory")
     (
         session
@@ -85,7 +87,6 @@ def cache_mpmi(session) -> None:
 
 def stage_data(session, input_path: str, output_path: str) -> None:
     """
-
     """
     logger.info(f"Read vitals: {input_path}")
     raw = (
