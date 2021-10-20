@@ -39,12 +39,12 @@ VITALS = StructType([
 ])
 
 # TODO: Create delta table from schema
-# TODO: How to setup constraints (update trigger, sequence)?
+# TODO: How to setup constraints (update trigger, sequence)? See generated columns
 CQ_VITALS = StructType([
     # StructField('id', LongType(), nullable=True),
     StructField('client_id', StringType(), nullable=True),
     StructField('source_ale_prac_id', LongType(), nullable=True),
-    StructField('encounter_id', LongType(), nullable=True),
+    StructField('encounter_id', StringType(), nullable=True),
     StructField('patient_id', StringType(), nullable=True),
     # StructField('pt_id', LongType(), nullable=True),
     StructField('name', StringType(), nullable=True),

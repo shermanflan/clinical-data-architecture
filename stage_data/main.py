@@ -26,7 +26,8 @@ from pyspark.sql.types import (
 
 from lib import logger, SPARK_LOG_LEVEL
 from lib.etl import (
-    stage_data, load_vitals, upsert_vitals, time_travel
+    create_vitals_delta, cache_mpmi, stage_data, load_vitals,
+    upsert_vitals, time_travel
 )
 from lib.schema import ENCOUNTERS, OBSERVATIONS, PATIENTS
 
@@ -87,20 +88,28 @@ def acquire_vitals(filepath: str, filepath2: str, output_path: str) -> None:
 
     start = datetime.now()
 
+    logger.info(f"Creating vitals delta: {output_path}")
+    delta_path = create_vitals_delta(spark_session, output_path)
+    logger.info(f"Create finished in {datetime.now() - start}")
+
+    logger.info(f"Caching mpmi: {output_path}")
+    cache_mpmi(spark_session)
+    logger.info(f"Cache finished in {datetime.now() - start}")
+
     logger.info(f"Processing vitals: {filepath}")
     load_vitals(spark_session, filepath, output_path)
     logger.info(f"Load process finished in {datetime.now() - start}")
 
     logger.info(f"Processing vitals: {filepath2}")
-    delta_path = upsert_vitals(spark_session, filepath2, output_path)
-    logger.info(f"Load process finished in {datetime.now() - start}")
+    upsert_vitals(spark_session, filepath2, output_path)
+    logger.info(f"Upsert process finished in {datetime.now() - start}")
 
     logger.info(f"Time-travel vitals: {delta_path}")
     time_travel(
         spark_session,
-        delta_path  # ="/opt/spark/work-dir/output_data/public/vitals/delta"
+        delta_path
     )
-    logger.info(f"Load process finished in {datetime.now() - start}")
+    logger.info(f"Time-travel finished in {datetime.now() - start}")
 
     input("Press enter to exit...")  # keep alive for Spark UI
 
