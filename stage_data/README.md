@@ -11,6 +11,9 @@ showcasing the feature this architecture offers for acquiring data at scale.
 
 ## Index
 - [Appendix](#appendix)
+- [PySpark Examples - Fluent API](#fluent-api)
+- [PySpark Examples - SparkSQL](#spark-sql)
+- [PySpark Examples - Delta Lake](#delta-lake)
 
 ## How it Works
 ![Spark on K8s](https://spark.apache.org/docs/latest/img/k8s-cluster-mode.png)
@@ -26,7 +29,7 @@ supported. In a sense PySpark's DataFrame API unifies programmatic
 access to Spark functionality, rather than having to use distinct
 tools (`Python` and `dbt` for example).
 
-### PySpark 101 - Fluent API
+### <a name='fluent-api'></a>PySpark 101 - Fluent API
 The fluent API will be familiar to those with Pandas experience.
 1. Define a schema. Using a pre-defined schema avoids schema inference thereby improving load performance.
 ```python
@@ -88,7 +91,7 @@ enc_counts = (
  )
 ```
 
-### PySpark 101 - Spark SQL
+### <a name='spark-sql'></a>PySpark 101 - Spark SQL
 Spark SQL complies with `ANSI:2003` and can be preferable when implementing complex transformations.
 1. Create a database in the `Hive` metastore (i.e. data dictionary).
 ```python
@@ -164,7 +167,7 @@ bp_counts = spark_session.sql("""
 """)
 ```
 
-### PySpark 101 - Delta Lake API
+### <a name='delta-lake'></a>PySpark 101 - Delta Lake API
 The Delta Lake combines the ACID/CRUD properties of a database with the performance/flexibility of a data lake. These are also termed "Data Lake Houses".
 1. Save a `DataFrame` as a `Delta` table. The `mergeSchema` option supports "schema drift".
 ```python
