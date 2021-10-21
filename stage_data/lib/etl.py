@@ -25,8 +25,7 @@ def create_vitals_delta(session, delta_root: str) -> str:
     """
     delta_path = "{root}/public/vitals/delta".format(root=delta_root)
 
-    # TODO: Create from schema
-    # TODO: How to setup constraints (update trigger, sequence)? See generated columns
+    # TODO: Add constraints (update trigger, sequence) via generated columns
     (
         DeltaTable
         .createIfNotExists(session)
@@ -203,7 +202,6 @@ def upsert_vitals(session, input_path: str, output_path: str) -> None:
     stage_data(session, input_path, output_path)
 
     logger.info(f"Conform vitals")
-
     conformed = session.sql("""
         SELECT  v.client_id,
                 m.ale_prac_id AS source_ale_prac_id,
@@ -255,10 +253,10 @@ def upsert_vitals(session, input_path: str, output_path: str) -> None:
         WHERE   v.rn = 1
     """)
 
-    delta_path = "{root}/public/vitals/delta".format(root=output_path)
-
     # TODO: Patient match, load demographics cached?
     # TODO: Store demographic matches as delta, partitioned by
+    delta_path = "{root}/public/vitals/delta".format(root=output_path)
+
     logger.info(f"Publish vitals delta: {delta_path}")
     (
         DeltaTable
@@ -300,8 +298,9 @@ def time_travel(session, delta_path: str) -> None:
             "version",
             "timestamp",
             "operation",
-            "operationParameters",
-            "operationMetrics")
+            # "operationParameters",
+            # "operationMetrics"
+        )
         .show(truncate=False)
     )
 
@@ -313,6 +312,7 @@ def time_travel(session, delta_path: str) -> None:
         .load(delta_path)  # As DataFrame
         .groupBy('source_ale_prac_id')
         .count()
+        .orderBy('source_ale_prac_id')
         .show(n=21)
     )
 
@@ -325,5 +325,6 @@ def time_travel(session, delta_path: str) -> None:
         .load(delta_path)  # As DataFrame
         .groupBy('source_ale_prac_id')
         .count()
+        .orderBy('source_ale_prac_id')
         .show(n=21)
     )
