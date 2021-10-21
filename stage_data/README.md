@@ -30,18 +30,7 @@ showcasing the feature this architecture offers for acquiring data at scale.
 - Supports the enforcement of data schemas and schema drift
 - Open source
 
-## How it Works
-![Spark on K8s](https://spark.apache.org/docs/latest/img/k8s-cluster-mode.png)
-
-```shell
-./bin/docker-image-tool.sh -t 3.1.1 build
-```
-
 ## Proposed Architecture
-
-## Proposed Approach
-
-## Propose Implementation Plan (crawl, walk, run)
 
 ## How to Run the Demo
 
