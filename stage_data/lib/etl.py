@@ -253,8 +253,8 @@ def upsert_vitals(session, input_path: str, output_path: str) -> None:
         WHERE   v.rn = 1
     """)
 
-    # TODO: Patient match, load demographics cached?
-    # TODO: Store demographic matches as delta, partitioned by
+    # TODO: RE: patient matches, load demographics as a Delta and keep sync'd
+    # TODO: Partition demographics Delta by prac
     delta_path = "{root}/public/vitals/delta".format(root=output_path)
 
     logger.info(f"Publish vitals delta: {delta_path}")
@@ -266,8 +266,6 @@ def upsert_vitals(session, input_path: str, output_path: str) -> None:
                AND tgt.encounter_id = src.encounter_id
                AND tgt.patient_id = src.patient_id
                AND tgt.code = src.code
-               AND tgt.source_guid != src.source_guid
-               --AND tgt.hj_modify_timestamp < src.hj_modify_timestamp
         """)
         .whenMatchedUpdateAll()
         .whenNotMatchedInsertAll()
