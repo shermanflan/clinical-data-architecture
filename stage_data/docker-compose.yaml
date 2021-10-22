@@ -32,8 +32,7 @@ services:
       --filepath2 /opt/spark/work-dir/input_data/raw/healthjump/vitals/2021/10/18/aledade_vitals_rh_20211018.gz
       --output_path /opt/spark/work-dir/output_data"
     ]
-      # --filepath s3a://bangkok/departuredelays.csv
-      # --output_path s3a://condesa/departuredelays"
+      # --output_path s3a://bangkok/output_data"
     depends_on:
       - pgsql-spark
     env_file: .env
