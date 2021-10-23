@@ -1,8 +1,10 @@
+from datetime import datetime
 import logging
 import os
 
 from pyspark.sql import SparkSession
 
+ETL_DATE = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
 LOG_LEVEL = os.environ.get('LOG_LEVEL', 'ERROR')
 SPARK_LOG_LEVEL = os.environ.get('SPARK_LOG_LEVEL', 'ERROR')
 log_level_code = getattr(logging, LOG_LEVEL.upper(), None)

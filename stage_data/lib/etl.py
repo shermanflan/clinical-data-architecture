@@ -13,7 +13,7 @@ from pyspark.sql.types import (
     StructType, StructField, TimestampType
 )
 
-from lib import logger
+from lib import logger, ETL_DATE
 from lib.path import get_lake_path
 from lib.schema import VITALS, CQ_VITALS
 
@@ -30,9 +30,10 @@ def create_vitals_delta(session, delta_root: str) -> str:
         DeltaTable
         .createIfNotExists(session)
         .addColumn("client_id", StringType())
-        .addColumn("source_ale_prac_id", "INT", comment="Source prac")
+        .addColumn("source_ale_prac_id", "INT",
+                   comment="Source practice id")
         .addColumn("encounter_id", StringType())
-        .addColumn("patient_id", "STRING", comment="Source pt id")
+        .addColumn("patient_id", "STRING", comment="Source patient id")
         .addColumn("name", StringType())
         .addColumn("code", StringType())
         .addColumn("code_system_name", StringType())
@@ -41,29 +42,36 @@ def create_vitals_delta(session, delta_root: str) -> str:
         .addColumn("unit", StringType())
         .addColumn("observation_date", TimestampType())
         .addColumn("source_guid", StringType(), comment="Traceability")
-        # .addColumn("created_at",
-        #            TimestampType(),
-        #            generatedAlwaysAs="current_timestamp()")
-        # .addColumn("updated_at",
-        #            TimestampType(),
-        #            generatedAlwaysAs="current_timestamp()")
+        .addColumn("source", StringType(), comment="Traceability")
+        .addColumn("created_at", TimestampType(), nullable=False)
+        .addColumn("updated_at", TimestampType(), nullable=False)
         .property("description", "published vitals")
         .location(delta_path)
         .partitionedBy("source_ale_prac_id")
         .execute()
     )
 
+    logger.info(f"Create delta temp view: {delta_path}")
     (
         session
         .read
         .format("delta")
         .load(delta_path)  # As DataFrame
-        .select('source_ale_prac_id', 'patient_id')
-        .groupBy('source_ale_prac_id')
-        .agg(countDistinct('patient_id').alias("total_pt"))  # action
-        .orderBy("total_pt", ascending=False)  # wide transformation
-        .show()
+        .createOrReplaceTempView("delta_vitals")
     )
+
+    # (
+    #     session
+    #     .read
+    #     .format("delta")
+    #     .load(delta_path)  # As DataFrame
+    #     .select('source_ale_prac_id', 'patient_id')
+    #     .groupBy('source_ale_prac_id')
+    #     .agg(countDistinct('patient_id').alias("total_pt"))  # action
+    #     .orderBy("total_pt", ascending=False)  # wide transformation
+    #     .show()
+    # )
+
     return delta_path
 
 
@@ -95,7 +103,9 @@ def stage_data(session, input_path: str, output_path: str) -> None:
         # .option("nullValue", "")  # Replace any null data with quotes
         .csv(input_path,
              sep='|', header=False, schema=VITALS)
-        # .withColumn("source", lit(basename(input_path)))
+        .withColumn("source", lit(basename(input_path)))
+        .withColumn("created_at", to_timestamp(lit(ETL_DATE), "yyyy-MM-dd HH:mm:ss"))
+        .withColumn("updated_at", to_timestamp(lit(ETL_DATE), "yyyy-MM-dd HH:mm:ss"))
     )
 
     stage_path = (
@@ -115,7 +125,7 @@ def stage_data(session, input_path: str, output_path: str) -> None:
                  partitionBy=['client_id'])  # action
     )
 
-    logger.info(f"Read stage, prac partitioned: {stage_path}")
+    logger.info(f"Create stage temp view: {stage_path}")
     (
         session
         .read
@@ -150,17 +160,21 @@ def load_vitals(session, input_path: str, output_path: str) -> None:
                                 'yyyyMMdd HH:mm:ss'),
                     to_timestamp(v.service_date, 'yyyyMMdd')
                 ) AS observation_date,
-                v.row_hash AS source_guid
+                v.row_hash AS source_guid,
+                v.source,
+                v.created_at,
+                v.updated_at
         FROM    stage_vitals AS v
             INNER JOIN mpmi AS m
                 ON v.client_id = m.document_oid
+            LEFT JOIN delta_vitals AS delta
+                ON v.row_hash = delta.source_guid
+        WHERE   delta.source_guid IS NULL
     """)
 
     delta_path = "{root}/public/vitals/delta".format(root=output_path)
 
     logger.info(f"Publish vitals delta: {delta_path}")
-    # TODO: Patient match, load demographics cached?
-    # TODO: Store demographic matches as delta, partitioned by client_id?
     (
         conformed
         .filter(conformed.value.isNotNull())
@@ -175,7 +189,10 @@ def load_vitals(session, input_path: str, output_path: str) -> None:
                 'value',
                 'unit',
                 'observation_date',
-                'source_guid')
+                'source_guid',
+                'source',
+                'created_at',
+                'updated_at')
         .write
         # .partitionBy('source_ale_prac_id')
         .format('delta')
@@ -184,16 +201,16 @@ def load_vitals(session, input_path: str, output_path: str) -> None:
         .save(delta_path)
     )
 
-    # logger.info(f"Read vitals delta: {delta_path}")
-    # (
-    #     session
-    #     .read
-    #     .format("delta")
-    #     .load(delta_path)  # As DataFrame
-    #     .groupBy('source_ale_prac_id')
-    #     .count()
-    #     .show(n=21, truncate=False)
-    # )
+    logger.info(f"Read vitals delta: {delta_path}")
+    (
+        session
+        .read
+        .format("delta")
+        .load(delta_path)  # As DataFrame
+        # .groupBy('source_ale_prac_id')
+        # .count()
+        .show(n=21, truncate=False)
+    )
 
 
 def upsert_vitals(session, input_path: str, output_path: str) -> None:
@@ -203,6 +220,42 @@ def upsert_vitals(session, input_path: str, output_path: str) -> None:
 
     logger.info(f"Conform vitals")
     conformed = session.sql("""
+        WITH clean_vitals
+        AS
+        (
+            SELECT  sv.client_id,
+                    sv.encounter_id,
+                    sv.patient_id,
+                    sv.height_in,
+                    sv.weight_lbs,
+                    sv.bp_systolic,
+                    sv.bp_diastolic,
+                    sv.bmi,
+                    sv.row_hash AS source_guid,
+                    sv.source,
+                    sv.created_at,
+                    sv.updated_at,
+                    to_timestamp(sv.hj_modify_timestamp,
+                                 'yyyyMMdd HH:mm:ss:SSSSSS') AS hj_modify_timestamp,
+                    IF (sv.service_time IS NOT NULL,
+                        to_timestamp(concat(sv.service_date, ' ', sv.service_time),
+                                    'yyyyMMdd HH:mm:ss'),
+                        to_timestamp(sv.service_date, 'yyyyMMdd')
+                    ) AS observation_date,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY sv.client_id, sv.encounter_id, sv.patient_id
+                        ORDER BY
+                            IF (sv.service_time IS NOT NULL,
+                                to_timestamp(
+                                    concat(sv.service_date, ' ', sv.service_time),
+                                    'yyyyMMdd HH:mm:ss'),
+                                to_timestamp(sv.service_date, 'yyyyMMdd')) DESC
+                    ) AS rn
+            FROM    stage_vitals AS sv
+                LEFT JOIN delta_vitals AS delta
+                    ON sv.row_hash = delta.source_guid
+            WHERE   delta.source_guid IS NULL
+        )
         SELECT  v.client_id,
                 m.ale_prac_id AS source_ale_prac_id,
                 v.encounter_id,
@@ -218,43 +271,16 @@ def upsert_vitals(session, input_path: str, output_path: str) -> None:
                 '2.16.840.1.113883.6.1' as code_system_oid,
                 v.hj_modify_timestamp,
                 v.observation_date,
-                v.source_guid
-        FROM    (
-            SELECT  client_id,
-                    encounter_id,
-                    patient_id,
-                    height_in,
-                    weight_lbs,
-                    bp_systolic,
-                    bp_diastolic,
-                    bmi,
-                    to_timestamp(hj_create_timestamp,
-                                 'yyyyMMdd HH:mm:ss:SSSSSS'
-                    ) AS hj_modify_timestamp,
-                    IF (service_time IS NOT NULL,
-                        to_timestamp(concat(service_date, ' ', service_time),
-                                    'yyyyMMdd HH:mm:ss'),
-                        to_timestamp(service_date, 'yyyyMMdd')
-                    ) AS observation_date,
-                    row_hash AS source_guid,
-                    ROW_NUMBER() OVER (
-                        PARTITION BY client_id, encounter_id, patient_id
-                        ORDER BY 
-                            IF (service_time IS NOT NULL,
-                                to_timestamp(
-                                    concat(service_date, ' ', service_time),
-                                    'yyyyMMdd HH:mm:ss'),
-                                to_timestamp(service_date, 'yyyyMMdd')) DESC
-                    ) AS rn                    
-            FROM    stage_vitals
-        ) AS v
+                v.source_guid,
+                v.source,
+                v.created_at,
+                v.updated_at
+        FROM    clean_vitals AS v
             INNER JOIN mpmi AS m
                 ON v.client_id = m.document_oid
         WHERE   v.rn = 1
     """)
 
-    # TODO: RE: patient matches, load demographics as a Delta and keep sync'd
-    # TODO: Partition demographics Delta by prac
     delta_path = "{root}/public/vitals/delta".format(root=output_path)
 
     logger.info(f"Publish vitals delta: {delta_path}")
@@ -267,21 +293,33 @@ def upsert_vitals(session, input_path: str, output_path: str) -> None:
                AND tgt.patient_id = src.patient_id
                AND tgt.code = src.code
         """)
-        .whenMatchedUpdateAll()
+        .whenMatchedUpdate(set={
+            "patient_id": col('src.patient_id'),
+            "name": col('src.name'),
+            "code": col('src.code'),
+            "code_system_name": col('src.code_system_name'),
+            "code_system_oid": col('src.code_system_oid'),
+            "value": col('src.value'),
+            "unit": col('src.unit'),
+            "observation_date": col('src.observation_date'),
+            "source_guid": col('src.source_guid'),
+            "source": col('src.source'),
+            "updated_at": col('src.updated_at'),
+        })
         .whenNotMatchedInsertAll()
         .execute()
     )
 
-    # logger.info(f"Read vitals delta: {delta_path}")
-    # (
-    #     session
-    #     .read
-    #     .format("delta")
-    #     .load(delta_path)  # To DataFrame
-    #     .groupBy('source_ale_prac_id')
-    #     .count()
-    #     .show(n=21)
-    # )
+    logger.info(f"Read vitals delta: {delta_path}")
+    (
+        session
+        .read
+        .format("delta")
+        .load(delta_path)  # To DataFrame
+        # .groupBy('source_ale_prac_id')
+        # .count()
+        .show(n=21)
+    )
 
 
 def time_travel(session, delta_path: str) -> None:
@@ -297,7 +335,7 @@ def time_travel(session, delta_path: str) -> None:
             "timestamp",
             "operation",
             # "operationParameters",
-            # "operationMetrics"
+            "operationMetrics"
         )
         .show(truncate=False)
     )
