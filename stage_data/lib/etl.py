@@ -20,9 +20,10 @@ from lib.schema import VITALS, CQ_VITALS
 
 def create_vitals_delta(session, delta_root: str) -> str:
     """
-    TODO: The `partitionedBy` routine is not creating the partition metadata.
+    The `partitionedBy` routine is not creating the partition metadata.
     For now, the Delta table will be created inline during initial
-    staging. Try converting to Spark SQL DDL.
+    staging.
+    TODO: Try converting to Spark SQL DDL.
 
     :return: the path to the delta table
     """
@@ -211,7 +212,7 @@ def load_vitals(session, mpmi: DataFrame, input_path: str, output_path: str) -> 
     #     .format("delta")
     #     .load(delta_path)  # As DataFrame
     #     .groupBy('source_ale_prac_id')
-    #     .count()
+    #     .agg(count("*"))
     #     .orderBy('source_ale_prac_id')
     #     .show(n=21, truncate=False)
     # )
