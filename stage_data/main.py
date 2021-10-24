@@ -3,6 +3,13 @@ Usage:
 - From Spark 3.1.1 base container with Python bindings:
 docker run --rm -it --name test_pyspark spark-ingest:latest /bin/bash
 ./bin/spark-submit spark-ingest/main.py --filepath ./examples/src/main/python/pi.py
+- From binaries:
+./pyspark --packages io.delta:delta-core_2.12:1.0.0 \
+    --conf "spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension" \
+    --conf "spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog"
+./spark-sql --packages io.delta:delta-core_2.12:1.0.0 \
+    --conf "spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension" \
+    --conf "spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog"
 """
 from datetime import datetime, date, timedelta
 import os
@@ -57,9 +64,9 @@ spark_session = (
     # Specify different location for Hive metastore
     # .config("spark.sql.warehouse.dir", "/opt/spark/hive_warehouse")
     # .config("spark.sql.catalogImplementation", "hive")
-    # TODO: Delta lake
-    .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
-    .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog")
+    # Delta lake integration with Spark DataSourceV2 and Catalog
+    # .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
+    # .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog")
     .getOrCreate()
 )
 spark_session.sparkContext.setLogLevel(SPARK_LOG_LEVEL)
@@ -73,33 +80,31 @@ def cli():
 @cli.command()
 @click.option('--filepath', required=False, help='The input file path')
 @click.option('--filepath2', required=False, help='The input file path')
-@click.option('--output_path', required=False, help='The output file path')
+@click.option('--output-path', required=False, help='The output file path')
 def acquire_vitals(filepath: str, filepath2: str, output_path: str) -> None:
     """
     """
+    # TODO: Build Spark 3.2 container with Python bindings
+    # TODO: RE: patient matches, load demographics as a Delta and keep sync'd
+    # TODO: Partition demographics Delta by prac
     # TODO: Implement "Current" tables as delta lake tables (merge/upsert)
-    # TODO: Stream (update mode) to PostgreSQL table
-    # TODO: Stream from csv/parquet directory to PostgreSQL (append, update)
-    # TODO: Stream from csv/parquet vitals to groupBy(patient).max(observation)?
-    # TODO: Implement "Current" tables as delta lake tables (merge)
-    # TODO: Stream (update mode) to PostgreSQL table
-
     start = datetime.now()
 
-    logger.info(f"Creating vitals delta: {output_path}")
-    delta_path = create_vitals_delta(spark_session, output_path)
-    logger.info(f"Create finished in {datetime.now() - start}")
+    # logger.info(f"Creating vitals delta: {output_path}")
+    # delta_path = create_vitals_delta(spark_session, output_path)
+    delta_path = "{root}/public/vitals/delta".format(root=output_path)
+    # logger.info(f"Create finished in {datetime.now() - start}")
 
     logger.info(f"Caching mpmi: {output_path}")
-    cache_mpmi(spark_session)
+    mpmi = cache_mpmi(spark_session)
     logger.info(f"Cache finished in {datetime.now() - start}")
 
     logger.info(f"Processing vitals: {filepath}")
-    load_vitals(spark_session, filepath, output_path)
+    load_vitals(spark_session, mpmi, filepath, output_path)
     logger.info(f"Load process finished in {datetime.now() - start}")
 
     logger.info(f"Processing vitals: {filepath2}")
-    upsert_vitals(spark_session, filepath2, output_path)
+    upsert_vitals(spark_session, mpmi, filepath2, output_path)
     logger.info(f"Upsert process finished in {datetime.now() - start}")
 
     logger.info(f"Time-travel vitals: {delta_path}")
@@ -110,6 +115,33 @@ def acquire_vitals(filepath: str, filepath2: str, output_path: str) -> None:
     logger.info(f"Time-travel finished in {datetime.now() - start}")
 
     input("Press enter to exit...")  # keep alive for Spark UI
+
+
+@cli.command()
+@click.option('--source-path', required=False, help='The Delta path')
+@click.option('--output-path', required=False, help='The output file path')
+def stream_vitals(source_path: str, output_path: str) -> None:
+    """
+    JDBC streaming is not supported so I'm not sure how to use this.
+    It may be that Kafka is necessary.
+    """
+    logger.info(f"Stream (append mode) to delta on: {source_path}")
+    (
+        spark_session
+        .readStream
+        .format("delta")
+        # .option("ignoreDeletes", "true")
+        # .option("ignoreChanges", "true")
+        .load(source_path)
+        .writeStream
+        # .format("console")  # debug
+        .format("delta")
+        .outputMode("append")
+        .option("checkpointLocation", f"{output_path}/_checkpoints/stream-from-delta")
+        .queryName('vitals_stream')
+        .start(output_path)
+        .awaitTermination(timeout=60*5)  # 5 min
+    )
 
 
 if __name__ == "__main__":

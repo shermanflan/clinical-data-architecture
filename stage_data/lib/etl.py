@@ -193,14 +193,15 @@ def load_vitals(session, mpmi: DataFrame, input_path: str, output_path: str) -> 
                 'created_at',
                 'updated_at')
         .write
-        # .partitionBy('source_ale_prac_id')
-        # .format('delta')
-        # .mode("append")
-        # .save(delta_path)
-        # Cleaner option
         .partitionBy('source_ale_prac_id')
-        .option('path', delta_path)
-        .saveAsTable('delta_vitals', format='delta', mode='overwrite')
+        .format('delta')
+        .mode("append")
+        # .mode("overwrite")
+        .save(delta_path)
+        # Cleaner option
+        # .partitionBy('source_ale_prac_id')
+        # .option('path', delta_path)
+        # .saveAsTable('delta_vitals', format='delta', mode='append')
     )
 
     # logger.info(f"Read vitals delta: {delta_path}")
@@ -285,6 +286,8 @@ def upsert_vitals(session, mpmi: DataFrame, input_path: str, output_path: str) -
         WHERE   v.rn = 1
     """)
 
+    # TODO: In order to support structured streaming, this could be
+    # changed to an append write.
     logger.info(f"Merge vitals delta: {delta_path}")
     (
         DeltaTable

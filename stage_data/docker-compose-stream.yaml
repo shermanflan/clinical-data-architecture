@@ -1,0 +1,34 @@
+version: "3.8"
+services:
+  stream_data:
+    image: stream_data
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - 4050:4040
+    command: [
+      "/bin/sh",
+      "-c",
+      "/opt/spark/bin/spark-submit \
+      --name stage_data \
+      --conf spark.jars.packages=io.delta:delta-core_2.12:1.0.0 \
+      --conf spark.jars.ivy=/tmp/.ivy \
+      --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension \
+      --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog \
+      local:///opt/spark/stage_data/main.py \
+      stream-vitals \
+      --source-path /opt/spark/work-dir/output_data/public/vitals/delta
+      --output-path /opt/spark/work-dir/output_data/stream/vitals/delta"
+    ]
+    env_file: .env
+    environment:
+      - LOG_LEVEL=INFO
+      - SPARK_LOG_LEVEL=WARN
+      - POSTGRES_DB_URL=postgresql://sa:pwd@localhost/psycodb
+      - POSTGRES_JDBC_URL=jdbc:postgresql://localhost/psycodb?user=sa&password=pwd
+    volumes:
+      - ./local_config:/opt/spark/conf
+      # - ./local_hive:/opt/spark/hive_warehouse
+      - ./sample_data/input_data:/opt/spark/work-dir/input_data
+      - ./sample_data/output_data:/opt/spark/work-dir/output_data
