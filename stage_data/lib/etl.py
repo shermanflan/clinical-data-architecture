@@ -336,12 +336,16 @@ def time_travel(session, delta_path: str) -> None:
         DeltaTable
         .forPath(session, delta_path)
         .history(21)
+        .withColumn("row_count", expr("operationMetrics.numOutputRows"))
         .select(
             "version",
             "timestamp",
+            "userName",
             "operation",
+            "job",
             # "operationParameters",
-            "operationMetrics"
+            # "operationMetrics",
+            "row_count"
         )
         .show(truncate=False)
     )

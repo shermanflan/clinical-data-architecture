@@ -13,6 +13,7 @@ docker run --rm -it --name test_pyspark spark-ingest:latest /bin/bash
 """
 from datetime import datetime, date, timedelta
 import os
+import shutil
 
 import boto3
 import click
@@ -39,6 +40,9 @@ spark_session = (
     SparkSession
     .builder
     .appName("stage_data")
+    # AWS general authorization
+    .config("spark.hadoop.fs.s3a.access.key", os.environ['P3_AWS_ACCESS_KEY'])
+    .config("spark.hadoop.fs.s3a.secret.key", os.environ['P3_AWS_SECRET_KEY'])
     # AWS bucket-specific authorization
     # .config(f"fs.s3a.bucket.{os.environ['P3_BUCKET']}.access.key", os.environ['P3_AWS_ACCESS_KEY'])
     # .config(f"fs.s3a.bucket.{os.environ['P3_BUCKET']}.secret.key", os.environ['P3_AWS_SECRET_KEY'])
@@ -80,8 +84,15 @@ def cli():
 @cli.command()
 @click.option('--filepath', required=False, help='The input file path')
 @click.option('--filepath2', required=False, help='The input file path')
-@click.option('--output-path', required=False, help='The output file path')
-def acquire_vitals(filepath: str, filepath2: str, output_path: str) -> None:
+@click.option(
+    '--output-path', required=False, help='The output file path')
+@click.option(
+    '--delta-truncate', default=True, help='Clear previous delta runs')
+def acquire_vitals(
+        filepath: str,
+        filepath2: str,
+        output_path: str,
+        delta_truncate: bool) -> None:
     """
     """
     # TODO: Build Spark 3.2 container with Python bindings
@@ -92,10 +103,14 @@ def acquire_vitals(filepath: str, filepath2: str, output_path: str) -> None:
     # See here: https://www.youtube.com/watch?v=aF2hRH5WZAU
     # monotonically_increasing_id() can also be used.
     start = datetime.now()
+    delta_path = "{root}/public/vitals/delta".format(root=output_path)
+
+    if delta_truncate:
+        logger.info(f"Clearing vitals delta: {delta_path}")
+        shutil.rmtree(delta_path, ignore_errors=True)
 
     # logger.info(f"Creating vitals delta: {output_path}")
     # delta_path = create_vitals_delta(spark_session, output_path)
-    delta_path = "{root}/public/vitals/delta".format(root=output_path)
     # logger.info(f"Create finished in {datetime.now() - start}")
 
     logger.info(f"Caching mpmi: {output_path}")
