@@ -88,6 +88,9 @@ def acquire_vitals(filepath: str, filepath2: str, output_path: str) -> None:
     # TODO: RE: patient matches, load demographics as a Delta and keep sync'd
     # TODO: Partition demographics Delta by prac
     # TODO: Implement "Current" tables as delta lake tables (merge/upsert)
+    # TODO: How to write parent/child tables to db at scale?
+    # See here: https://www.youtube.com/watch?v=aF2hRH5WZAU
+    # monotonically_increasing_id() can also be used.
     start = datetime.now()
 
     # logger.info(f"Creating vitals delta: {output_path}")
@@ -123,7 +126,7 @@ def acquire_vitals(filepath: str, filepath2: str, output_path: str) -> None:
 def stream_vitals(source_path: str, output_path: str) -> None:
     """
     JDBC streaming is not supported so I'm not sure how to use this.
-    It may be that Kafka is necessary.
+    It may be that Kafka is necessary for true streaming.
     """
     logger.info(f"Stream (append mode) to delta on: {source_path}")
     (

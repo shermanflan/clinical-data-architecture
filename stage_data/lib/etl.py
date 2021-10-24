@@ -198,7 +198,7 @@ def load_vitals(session, mpmi: DataFrame, input_path: str, output_path: str) -> 
         .mode("append")
         # .mode("overwrite")
         .save(delta_path)
-        # Cleaner option
+        # Cleaner option, but throws errors when re-running
         # .partitionBy('source_ale_prac_id')
         # .option('path', delta_path)
         # .saveAsTable('delta_vitals', format='delta', mode='append')
@@ -286,8 +286,6 @@ def upsert_vitals(session, mpmi: DataFrame, input_path: str, output_path: str) -
         WHERE   v.rn = 1
     """)
 
-    # TODO: In order to support structured streaming, this could be
-    # changed to an append write.
     logger.info(f"Merge vitals delta: {delta_path}")
     (
         DeltaTable
@@ -298,19 +296,21 @@ def upsert_vitals(session, mpmi: DataFrame, input_path: str, output_path: str) -
                AND tgt.patient_id = src.patient_id
                AND tgt.code = src.code
         """)
-        .whenMatchedUpdate(set={
-            "patient_id": col('src.patient_id'),
-            "name": col('src.name'),
-            "code": col('src.code'),
-            "code_system_name": col('src.code_system_name'),
-            "code_system_oid": col('src.code_system_oid'),
-            "value": col('src.value'),
-            "unit": col('src.unit'),
-            "observation_date": col('src.observation_date'),
-            "source_guid": col('src.source_guid'),
-            "source": col('src.source'),
-            "updated_at": col('src.updated_at'),
-        })
+        .whenMatchedUpdate(
+            condition="tgt.observation_date < src.observation_date",
+            set={
+                "patient_id": col('src.patient_id'),
+                "name": col('src.name'),
+                "code": col('src.code'),
+                "code_system_name": col('src.code_system_name'),
+                "code_system_oid": col('src.code_system_oid'),
+                "value": col('src.value'),
+                "unit": col('src.unit'),
+                "observation_date": col('src.observation_date'),
+                "source_guid": col('src.source_guid'),
+                "source": col('src.source'),
+                "updated_at": col('src.updated_at'),
+            })
         .whenNotMatchedInsertAll()
         .execute()
     )
