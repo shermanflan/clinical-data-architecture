@@ -41,8 +41,8 @@ spark_session = (
     .builder
     .appName("stage_data")
     # AWS general authorization
-    .config("spark.hadoop.fs.s3a.access.key", os.environ['P3_AWS_ACCESS_KEY'])
-    .config("spark.hadoop.fs.s3a.secret.key", os.environ['P3_AWS_SECRET_KEY'])
+    # .config("spark.hadoop.fs.s3a.access.key", os.environ['P3_AWS_ACCESS_KEY'])
+    # .config("spark.hadoop.fs.s3a.secret.key", os.environ['P3_AWS_SECRET_KEY'])
     # AWS bucket-specific authorization
     # .config(f"fs.s3a.bucket.{os.environ['P3_BUCKET']}.access.key", os.environ['P3_AWS_ACCESS_KEY'])
     # .config(f"fs.s3a.bucket.{os.environ['P3_BUCKET']}.secret.key", os.environ['P3_AWS_SECRET_KEY'])
@@ -69,6 +69,7 @@ spark_session = (
     # .config("spark.sql.warehouse.dir", "/opt/spark/hive_warehouse")
     # .config("spark.sql.catalogImplementation", "hive")
     # Delta lake integration with Spark DataSourceV2 and Catalog
+    # .config("spark.jars.packages", "io.delta:delta-core_2.12:1.0.0")
     # .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
     # .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog")
     .getOrCreate()
@@ -95,6 +96,7 @@ def acquire_vitals(
         delta_truncate: bool) -> None:
     """
     """
+    # TODO: Import lib to Jupyter container
     # TODO: Build Spark 3.2 container with Python bindings
     # TODO: RE: patient matches, load demographics as a Delta and keep sync'd
     # TODO: Partition demographics Delta by prac

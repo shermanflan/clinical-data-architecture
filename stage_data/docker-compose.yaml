@@ -25,13 +25,13 @@ services:
       "/opt/spark/bin/spark-submit \
       --name stage_data \
       --conf spark.jars.packages=io.delta:delta-core_2.12:1.0.0 \
-      --conf spark.jars.ivy=/tmp/.ivy \
       --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension \
       --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog \
+      --conf spark.jars.ivy=/tmp/.ivy \
       local:///opt/spark/stage_data/main.py \
       acquire-vitals \
-      --filepath /opt/spark/work-dir/input_data/raw/healthjump/vitals/2021/10/15/aledade_vitals_rh_20211015.gz
-      --filepath2 /opt/spark/work-dir/input_data/raw/healthjump/vitals/2021/10/18/aledade_vitals_rh_20211018.gz
+      --filepath /opt/spark/work-dir/input_data/raw/healthjump/vitals/2021/10/15/aledade_vitals_rh_20211015.gz \
+      --filepath2 /opt/spark/work-dir/input_data/raw/healthjump/vitals/2021/10/18/aledade_vitals_rh_20211018.gz \
       --output-path /opt/spark/work-dir/output_data"
     ]
     depends_on:
@@ -54,12 +54,12 @@ services:
       dockerfile: Dockerfile-notebook
     ports:
       - 8888:8888
+      - 4050:4040
     command: "jupyter notebook --ip 0.0.0.0 --no-browser --allow-root --NotebookApp.token=''"
-    depends_on:
-      - pgsql-spark
     env_file: .env
     environment:
       - POSTGRES_DB_URL=postgresql://sa:pwd@pgsql-spark/psycodb
     volumes:
       - ./notebooks:/opt/spark/jupyter-lib/notebooks
       - ./sample_data/output_data:/opt/spark/jupyter-lib/output_data
+      - ./sample_data/input_data:/opt/spark/jupyter-lib/input_data

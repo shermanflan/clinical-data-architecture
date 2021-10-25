@@ -17,7 +17,6 @@ RUN pip install --upgrade pip wheel setuptools \
     && pip --no-cache-dir install -r ${APP_HOME}/requirements.txt \
     && rm /${APP_HOME}/requirements.txt
 
-# COPY --chown=jupyter-lib:jupyter-lib ./notebooks ${APP_HOME}/notebooks
 ENV PYTHONPATH=${APP_HOME}
 
 WORKDIR ${APP_HOME}
@@ -29,4 +28,3 @@ WORKDIR ${APP_HOME}
 USER jupyter-lib
 
 WORKDIR ${APP_HOME}
-# CMD "jupyter notebook --ip 0.0.0.0 --no-browser --allow-root --NotebookApp.token=''"
