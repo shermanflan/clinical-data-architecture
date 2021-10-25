@@ -57,7 +57,7 @@ spark_session = (
     # TODO: S3A Optimizations
     .config("spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version", "2")
     .config("spark.hadoop.mapreduce.fileoutputcommitter.cleanup-failures.ignored", "true")
-    # TODO: S3A Optimizations
+    # TODO: S3A Optimizations: PathOutputCommitProtocol cannot be resolved
     # .config("spark.hadoop.fs.s3a.committer.name", "directory")
     # .config("spark.sql.sources.commitProtocolClass",
     #         "org.apache.spark.internal.io.cloud.PathOutputCommitProtocol")
@@ -91,7 +91,7 @@ def cli():
 @click.option(
     '--output-path', required=False, help='The output file path')
 @click.option(
-    '--delta-truncate', default=True, help='Clear previous delta runs')
+    '--delta-truncate/--no-delta-truncate', default=True, help='Clear previous delta runs')
 def acquire_vitals(
         filepath: str,
         filepath2: str,
@@ -118,7 +118,7 @@ def acquire_vitals(
     # delta_path = create_vitals_delta(spark_session, output_path)
     # logger.info(f"Create finished in {datetime.now() - start}")
 
-    logger.info(f"Caching mpmi: {output_path}")
+    logger.info(f"Caching mpmi")
     mpmi = cache_mpmi(spark_session)
     logger.info(f"Cache finished in {datetime.now() - start}")
 
