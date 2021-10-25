@@ -48,12 +48,15 @@ spark_session = (
     # .config(f"fs.s3a.bucket.{os.environ['P3_BUCKET']}.secret.key", os.environ['P3_AWS_SECRET_KEY'])
     # .config(f"fs.s3a.bucket.{os.environ['P3_BUCKET']}.session.token", os.environ['P3_AWS_SESSION_TOKEN'])
     # Or
-    # .config(f"spark.hadoop.fs.s3a.bucket.{os.environ['P3_BUCKET']}.access.key", os.environ['P3_AWS_ACCESS_KEY'])
-    # .config(f"spark.hadoop.fs.s3a.bucket.{os.environ['P3_BUCKET']}.secret.key", os.environ['P3_AWS_SECRET_KEY'])
+    .config(f"spark.hadoop.fs.s3a.bucket.{os.environ['P3_BUCKET']}.access.key", os.environ['P3_AWS_ACCESS_KEY'])
+    .config(f"spark.hadoop.fs.s3a.bucket.{os.environ['P3_BUCKET']}.secret.key", os.environ['P3_AWS_SECRET_KEY'])
     # .config("spark.hadoop.fs.s3a.bucket.bangkok.access.key", os.environ['BK_AWS_ACCESS_KEY'])
     # .config("spark.hadoop.fs.s3a.bucket.bangkok.secret.key", os.environ['BK_AWS_SECRET_KEY'])
     # .config("spark.hadoop.fs.s3a.bucket.condesa.access.key", os.environ['CO_AWS_ACCESS_KEY'])
     # .config("spark.hadoop.fs.s3a.bucket.condesa.secret.key", os.environ['CO_AWS_SECRET_KEY'])
+    # TODO: S3A Optimizations
+    .config("spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version", "2")
+    .config("spark.hadoop.mapreduce.fileoutputcommitter.cleanup-failures.ignored", "true")
     # TODO: S3A Optimizations
     # .config("spark.hadoop.fs.s3a.committer.name", "directory")
     # .config("spark.sql.sources.commitProtocolClass",
@@ -61,10 +64,10 @@ spark_session = (
     # .config("spark.sql.parquet.output.committer.class",
     #         "org.apache.spark.internal.io.cloud.BindingParquetOutputCommitter")
     # TODO: Parquet Optimizations
-    # .config("spark.hadoop.parquet.enable.summary-metadata", "false")
-    # .config("spark.sql.parquet.mergeSchema", "false")
-    # .config("spark.sql.parquet.filterPushdown", "true")
-    # .config("spark.sql.hive.metastorePartitionPruning", "true")
+    .config("spark.hadoop.parquet.enable.summary-metadata", "false")
+    .config("spark.sql.parquet.mergeSchema", "false")
+    .config("spark.sql.parquet.filterPushdown", "true")
+    .config("spark.sql.hive.metastorePartitionPruning", "true")
     # Specify different location for Hive metastore
     # .config("spark.sql.warehouse.dir", "/opt/spark/hive_warehouse")
     # .config("spark.sql.catalogImplementation", "hive")
