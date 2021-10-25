@@ -17,7 +17,7 @@ RUN pip install --upgrade pip wheel setuptools \
     && pip --no-cache-dir install -r ${APP_HOME}/requirements.txt \
     && rm /${APP_HOME}/requirements.txt
 
-COPY --chown=jupyter-lib:jupyter-lib ./notebooks ${APP_HOME}/notebooks
+# COPY --chown=jupyter-lib:jupyter-lib ./notebooks ${APP_HOME}/notebooks
 ENV PYTHONPATH=${APP_HOME}
 
 WORKDIR ${APP_HOME}
