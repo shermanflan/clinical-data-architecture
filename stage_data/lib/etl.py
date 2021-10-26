@@ -298,6 +298,7 @@ def upsert_vitals(session, mpmi: DataFrame, input_path: str, output_path: str) -
                AND tgt.code = src.code
         """)
         .whenMatchedUpdate(
+            # TODO: Test moving to join condition to prevent uneccessary file re-writes
             condition="tgt.observation_date < src.observation_date",
             set={
                 "patient_id": col('src.patient_id'),
