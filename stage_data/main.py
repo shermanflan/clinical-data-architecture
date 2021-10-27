@@ -24,6 +24,7 @@ from lib.etl import (
     create_vitals_delta, cache_mpmi, load_vitals,
     upsert_vitals, time_travel
 )
+from lib.secret import get_secret
 
 
 """
@@ -82,6 +83,11 @@ spark_session.sparkContext.setLogLevel(SPARK_LOG_LEVEL)
 
 @click.group()
 def cli():
+    pass
+
+
+@cli.command()
+def smoke_test():
     pass
 
 

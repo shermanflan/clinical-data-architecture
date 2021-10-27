@@ -14,7 +14,6 @@ from pyspark.sql.types import (
 )
 
 from lib import logger, ETL_DATE
-from lib.path import get_lake_path
 from lib.schema import VITALS, CQ_VITALS
 
 
