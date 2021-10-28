@@ -87,7 +87,39 @@ def cache_mpmi(session) -> DataFrame:
     return mpmi
 
 
-def stage_data(session, mpmi: DataFrame, input_path: str, output_path: str) -> None:
+def save_mpmi(session, output_path: str) -> str:
+    """
+    """
+    mpmi_path = f"{output_path}/reference/mpmi/parquet"
+
+    logger.info(f"Save mc_practice_master_info to disk: {mpmi_path}")
+    mpmi = (
+        session
+        .read
+        .jdbc(url=os.environ['POSTGRES_JDBC_URL'],
+              table='public.mc_practice_master_info')
+        .filter('enabled = true AND ale_prac_id IS NOT NULL')
+        .select('document_oid', 'ale_prac_id')
+        .distinct()
+    )
+    # mpmi.printSchema()
+    (
+        mpmi
+        .write
+        .parquet(
+            mpmi_path,
+            mode='overwrite'
+        )
+    )
+    return mpmi_path
+
+
+def stage_data(
+        session,
+        mpmi: DataFrame,
+        input_path: str,
+        output_path: str
+) -> None:
     """
     """
     logger.info(f"Read vitals: {input_path}")

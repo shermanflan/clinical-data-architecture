@@ -21,8 +21,8 @@ from pyspark.sql import SparkSession
 
 from lib import logger, SPARK_LOG_LEVEL
 from lib.etl import (
-    create_vitals_delta, cache_mpmi, load_vitals,
-    upsert_vitals, time_travel
+    create_vitals_delta, cache_mpmi, save_mpmi,
+    load_vitals, upsert_vitals, time_travel
 )
 from lib.secret import get_secret
 
@@ -120,13 +120,17 @@ def acquire_vitals(
         logger.info(f"Clearing vitals delta: {delta_path}")
         shutil.rmtree(delta_path, ignore_errors=True)
 
-    # logger.info(f"Creating vitals delta: {output_path}")
-    # delta_path = create_vitals_delta(spark_session, output_path)
-    # logger.info(f"Create finished in {datetime.now() - start}")
+    logger.info(f"Creating vitals delta: {output_path}")
+    delta_path = create_vitals_delta(spark_session, output_path)
+    logger.info(f"Create finished in {datetime.now() - start}")
 
     logger.info(f"Caching mpmi")
     mpmi = cache_mpmi(spark_session)
     logger.info(f"Cache finished in {datetime.now() - start}")
+
+    # logger.info(f"Persisting mpmi")
+    # mpmi_path = save_mpmi(spark_session, output_path)
+    # logger.info(f"Save finished in {datetime.now() - start}")
 
     logger.info(f"Processing vitals: {filepath}")
     load_vitals(spark_session, mpmi, filepath, output_path)
