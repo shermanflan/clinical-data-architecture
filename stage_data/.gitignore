@@ -132,3 +132,4 @@ dmypy.json
 sample_data/
 .idea/
 .Trash-*
+.DS_Store
