@@ -4,7 +4,7 @@ from typing import Dict
 import boto3
 from botocore.exceptions import ClientError
 
-from lib import logger
+from spark_etl import logger
 
 
 def get_secret(

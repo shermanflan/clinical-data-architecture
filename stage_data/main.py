@@ -19,12 +19,12 @@ import boto3
 import click
 from pyspark.sql import SparkSession
 
-from lib import logger, SPARK_LOG_LEVEL
-from lib.etl import (
+from spark_etl import logger, SPARK_LOG_LEVEL
+from spark_etl.etl import (
     create_vitals_delta, cache_mpmi, save_mpmi,
     load_vitals, upsert_vitals, time_travel
 )
-from lib.secret import get_secret
+from spark_etl.secret import get_secret
 
 
 """
@@ -105,7 +105,7 @@ def acquire_vitals(
         delta_truncate: bool) -> None:
     """
     """
-    # TODO: Import lib to Jupyter container
+    # TODO: Import spark_etl to Jupyter container
     # TODO: Build Spark 3.2 container with Python bindings
     # TODO: RE: patient matches, load demographics as a Delta and keep sync'd
     # TODO: Partition demographics Delta by prac
@@ -120,9 +120,9 @@ def acquire_vitals(
         logger.info(f"Clearing vitals delta: {delta_path}")
         shutil.rmtree(delta_path, ignore_errors=True)
 
-    logger.info(f"Creating vitals delta: {output_path}")
-    delta_path = create_vitals_delta(spark_session, output_path)
-    logger.info(f"Create finished in {datetime.now() - start}")
+    # logger.info(f"Creating vitals delta: {output_path}")
+    # delta_path = create_vitals_delta(spark_session, output_path)
+    # logger.info(f"Create finished in {datetime.now() - start}")
 
     logger.info(f"Caching mpmi")
     mpmi = cache_mpmi(spark_session)

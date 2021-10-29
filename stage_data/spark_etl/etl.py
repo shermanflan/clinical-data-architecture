@@ -13,8 +13,8 @@ from pyspark.sql.types import (
     StructType, StructField, TimestampType
 )
 
-from lib import logger, ETL_DATE
-from lib.schema import VITALS, CQ_VITALS
+from spark_etl import logger, ETL_DATE
+from spark_etl.schema import VITALS, CQ_VITALS
 
 
 def create_vitals_delta(session, delta_root: str) -> str:

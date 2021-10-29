@@ -16,7 +16,7 @@ RUN pip install --upgrade pip wheel setuptools \
     && pip --no-cache-dir install -r ${APP_HOME}/requirements.txt \
     && rm /${APP_HOME}/requirements.txt
 
-COPY ./lib ${APP_HOME}/lib
+COPY ./spark_etl ${APP_HOME}/spark_etl
 COPY ./main.py ${APP_HOME}
 ENV PYTHONPATH=${APP_HOME}
 
@@ -25,7 +25,4 @@ ENTRYPOINT [ "/opt/entrypoint.sh" ]
 
 # Specify the User that the actual main process will run as
 ARG spark_uid=185
-
-# Leave as root to start Thrift server
-# ${SPARK_HOME}/sbin/start-thriftserver.sh
 USER ${spark_uid}
