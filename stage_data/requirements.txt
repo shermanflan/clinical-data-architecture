@@ -1,5 +1,6 @@
 boto3==1.17.27
 click==7.1.2
+databricks-cli==0.16.2
 delta-spark==1.0.0
 notebook==6.3.0
 pyspark==3.1.1
